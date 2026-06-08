@@ -1,10 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import { Alert, Button, StyleSheet, View } from 'react-native';
 
+const API_URL = 'http://192.168.1.118:3000';
+
 export default function App() {
   const addTestItem = async () => {
     try {
-      const response = await fetch('http://localhost:3000/items', {
+      const response = await fetch(`${API_URL}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Used iPhone from Bartr' }),
