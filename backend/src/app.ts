@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { config, ItemStatus, InteractionType } from './config';
+import { logger } from './logger';
 
 dotenv.config();
 
@@ -31,12 +32,15 @@ app.get('/v1/feed', async (req, res) => {
     });
 
     if (error) {
+      logger.error({ error, userId, limit, offset }, 'Feed RPC failed');
       res.status(500).json({ error: 'Internal Server Error' });
       return;
     }
 
+    logger.info({ userId, count: (data || []).length, offset }, 'Feed served');
     res.json(data || []);
-  } catch {
+  } catch (err) {
+    logger.error({ err, userId }, 'Feed unexpected error');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -46,6 +50,7 @@ app.post('/v1/interactions', async (req, res) => {
   const userId = DEMO_USER_ID;
 
   if (item_id == null || ![InteractionType.DISLIKE, InteractionType.LIKE].includes(type)) {
+    logger.warn({ item_id, type }, 'Interaction rejected: invalid input');
     res.status(400).json({ error: 'Invalid request. Required: item_id (number), type (0 or 1)' });
     return;
   }
@@ -57,15 +62,19 @@ app.post('/v1/interactions', async (req, res) => {
 
     if (error) {
       if (error.code === '23505') {
+        logger.warn({ userId, item_id }, 'Duplicate interaction attempted');
         res.status(409).json({ error: 'Interaction already exists' });
         return;
       }
+      logger.error({ error, userId, item_id }, 'Interaction insert failed');
       res.status(500).json({ error: 'Internal Server Error' });
       return;
     }
 
+    logger.info({ userId, item_id, type }, 'Interaction recorded');
     res.status(201).json({ success: true });
-  } catch {
+  } catch (err) {
+    logger.error({ err, userId, item_id }, 'Interaction unexpected error');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -80,12 +89,15 @@ app.post('/items', async (req, res) => {
       .select();
 
     if (error) {
+      logger.error({ error, name }, 'Item creation failed');
       res.status(500).json({ error: 'Internal Server Error' });
       return;
     }
 
+    logger.info({ name, id: data?.[0]?.id }, 'Item created');
     res.status(201).json(data);
-  } catch {
+  } catch (err) {
+    logger.error({ err, name }, 'Item creation unexpected error');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -99,12 +111,15 @@ app.delete('/v1/dev/clear', async (_req, res) => {
       .eq('user_id', DEMO_USER_ID);
 
     if (error) {
+      logger.error({ error }, 'DEV clear failed');
       res.status(500).json({ error: 'Internal Server Error' });
       return;
     }
 
+    logger.info({ userId: DEMO_USER_ID }, 'DEV clear: all interactions deleted');
     res.json({ success: true });
-  } catch {
+  } catch (err) {
+    logger.error({ err }, 'DEV clear unexpected error');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
