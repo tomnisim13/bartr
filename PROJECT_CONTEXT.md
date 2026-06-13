@@ -56,6 +56,10 @@ bartr/
 └── .gitignore
 ```
 
+## Conventions
+
+- **DEV** — Comments/code marked with `DEV` are temporary development tools, dummy data, or placeholder logic. These must be removed or replaced before production release.
+
 ## Current Status
 
 - [x] Walking Skeleton (end-to-end: button → API → Supabase)
