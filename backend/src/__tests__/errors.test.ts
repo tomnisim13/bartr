@@ -14,7 +14,7 @@ import { app } from '../app';
 
 describe('Error resilience', () => {
   it('returns clean 500 when DB throws on feed', async () => {
-    const res = await request(app).get('/v1/feed');
+    const res = await request(app).get('/v1/feed?latitude=32&longitude=34');
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: 'Internal Server Error' });
     expect(res.body.stack).toBeUndefined();

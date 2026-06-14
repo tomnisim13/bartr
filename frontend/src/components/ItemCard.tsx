@@ -17,7 +17,12 @@ export function ItemCard({ item, onInfoPress }: Props) {
       <View style={styles.infoContainer}>
         <View style={styles.textRow}>
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.points}>{item.points_value} pts</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.points}>{item.points_value} pts</Text>
+            {item.distance_km != null && (
+              <Text style={styles.distance}>{item.distance_km.toFixed(1)} km</Text>
+            )}
+          </View>
         </View>
         <TouchableOpacity style={styles.infoButton} onPress={onInfoPress}>
           <Text style={styles.infoButtonText}>i</Text>
@@ -60,11 +65,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1a1a1a',
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 12,
+  },
   points: {
     fontSize: 16,
     fontWeight: '600',
     color: '#6c47ff',
-    marginTop: 4,
+  },
+  distance: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#888',
   },
   infoButton: {
     width: 36,
