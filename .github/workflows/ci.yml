@@ -30,18 +30,24 @@ jobs:
         run: node ./node_modules/typescript/bin/tsc --noEmit
 
       - name: Run tests
+        # supabase.ts calls createClient(...) at module load, which throws
+        # synchronously if the URL is missing — even validation/unit tests
+        # would crash on import. So we ALWAYS set non-empty env vars (with
+        # dummy fallbacks), and pick the suite based on whether real
+        # secrets were configured.
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'http://localhost:54321' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'dummy-key-for-unit-tests' }}
+          HAS_SUPABASE_SECRETS: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_ANON_KEY != '' }}
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY secrets not configured. Skipping integration tests; running unit-only."
+          if [ "$HAS_SUPABASE_SECRETS" = "true" ]; then
+            node ./node_modules/vitest/vitest.mjs run
+          else
+            echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY secrets not configured. Running unit-only suite."
             node ./node_modules/vitest/vitest.mjs run \
               src/__tests__/validation.test.ts \
               src/__tests__/errors.test.ts \
               src/__tests__/postgisPoint.test.ts
-          else
-            node ./node_modules/vitest/vitest.mjs run
           fi
 
   frontend:
