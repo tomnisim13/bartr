@@ -18,6 +18,16 @@ export async function postInteraction(itemId: number, type: InteractionType): Pr
   if (!response.ok) throw new Error('Failed to record interaction');
 }
 
+export async function getLastLocation(): Promise<{ latitude: number; longitude: number } | null> {
+  try {
+    const response = await fetch(`${config.apiUrl}/v1/users/location`);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function postLocation(lat: number, lng: number): Promise<void> {
   const response = await fetch(`${config.apiUrl}/v1/users/location`, {
     method: 'POST',
