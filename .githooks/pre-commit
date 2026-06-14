@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Check if PROJECT_CONTEXT.md is being updated in this commit
+CONTEXT_UPDATED=$(git diff --cached --name-only | grep -c "PROJECT_CONTEXT.md")
+
+# Check if other files are being committed
+OTHER_FILES=$(git diff --cached --name-only | grep -cv "PROJECT_CONTEXT.md")
+
+if [ "$OTHER_FILES" -gt 0 ] && [ "$CONTEXT_UPDATED" -eq 0 ]; then
+  echo ""
+  echo "⚠️  Reminder: PROJECT_CONTEXT.md was not updated in this commit."
+  echo "   If this change affects architecture, features, or status — please update it."
+  echo ""
+fi
+
+exit 0

@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Bartr",
+    "slug": "bartr",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/branding/logo.jpeg",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
@@ -19,7 +19,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/branding/logo.jpeg"
     }
   }
 }
