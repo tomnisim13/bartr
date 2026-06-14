@@ -16,7 +16,7 @@ export const config = {
     limit: 20,
   },
   location: {
-    DEFAULT_RADIUS_KM: 100,
+    DEFAULT_RADIUS_KM: 50,
     MAX_RADIUS_KM: 200,
     SIGNIFICANT_DISTANCE_CHANGE_METERS: 100,
   },

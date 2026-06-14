@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { AppState } from 'react-native';
 import * as Location from 'expo-location';
-import { postLocation, getLastLocation } from '../api';
+import { postLocation } from '../api';
 import { config } from '../config';
 import { logger } from '../logger';
 
@@ -31,35 +31,14 @@ export function useLocation(): UseLocationResult {
       if (!mounted) return;
 
       if (permStatus !== 'granted') {
-        // Try fallback to last stored location
-        const last = await getLastLocation();
-        if (last && mounted) {
-          setCoords({ lat: last.latitude, lng: last.longitude });
-          setStatus('granted');
-          logger.info({ lat: last.latitude, lng: last.longitude }, 'Using last stored location (permission denied)');
-          return;
-        }
         setStatus('denied');
         return;
       }
 
       setStatus('granted');
 
-      let initial: { lat: number; lng: number };
-      try {
-        const position = await Location.getCurrentPositionAsync({});
-        initial = { lat: position.coords.latitude, lng: position.coords.longitude };
-      } catch {
-        // GPS unavailable — fall back to last stored location
-        const last = await getLastLocation();
-        if (last && mounted) {
-          setCoords({ lat: last.latitude, lng: last.longitude });
-          logger.info({ lat: last.latitude, lng: last.longitude }, 'Using last stored location (GPS unavailable)');
-          return;
-        }
-        if (mounted) setStatus('denied');
-        return;
-      }
+      const position = await Location.getCurrentPositionAsync({});
+      const initial = { lat: position.coords.latitude, lng: position.coords.longitude };
 
       if (!mounted) return;
       setCoords(initial);

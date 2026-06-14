@@ -18,7 +18,7 @@ export const config = {
     prefetchThreshold: 5,
   },
   location: {
-    DEFAULT_RADIUS_KM: 100,
+    DEFAULT_RADIUS_KM: 50,
     SIGNIFICANT_DISTANCE_CHANGE_METERS: 100,
   },
   // DEV: development tools config — remove before production

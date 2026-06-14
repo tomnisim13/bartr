@@ -6,35 +6,6 @@ import { parseLatLng } from '../validation/location';
 
 export const usersRouter = Router();
 
-usersRouter.get('/v1/users/location', async (req, res) => {
-  const userId = DEMO_USER_ID;
-
-  try {
-    const { data, error } = await supabase
-      .from('user_locations')
-      .select('location, updated_at')
-      .eq('user_id', userId)
-      .single();
-
-    if (error || !data) {
-      res.status(404).json({ error: 'No stored location' });
-      return;
-    }
-
-    // Parse POINT(lng lat) from PostGIS
-    const match = data.location?.match?.(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-    if (!match) {
-      res.status(404).json({ error: 'No stored location' });
-      return;
-    }
-
-    res.json({ latitude: parseFloat(match[2]), longitude: parseFloat(match[1]), updated_at: data.updated_at });
-  } catch (err) {
-    logger.error({ err, userId }, 'Get location unexpected error');
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
 usersRouter.post('/v1/users/location', async (req, res) => {
   const userId = DEMO_USER_ID;
   const parsed = parseLatLng(req.body);
