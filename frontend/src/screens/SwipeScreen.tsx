@@ -5,13 +5,16 @@ import { ItemCard } from '../components/ItemCard';
 import { DetailModal } from '../components/DetailModal';
 import { EmptyState } from '../components/EmptyState';
 import { ClearAllButton } from '../components/ClearAllButton';
+import { LocationDeniedScreen } from './LocationDeniedScreen';
+import { useLocation } from '../hooks/useLocation';
 import { useFeed } from '../hooks/useFeed';
 import { useClearAll } from '../hooks/useClearAll';
 import { InteractionType, config } from '../config';
 import { Item } from '../types';
 
 export function SwipeScreen() {
-  const { cards, loading, empty, reload, recordSwipe, markEmpty } = useFeed();
+  const { status, coords } = useLocation();
+  const { cards, loading, empty, reload, recordSwipe, markEmpty } = useFeed(coords);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [swiperKey, setSwiperKey] = useState(0);
@@ -30,7 +33,8 @@ export function SwipeScreen() {
     setModalVisible(true);
   };
 
-  if (loading) return <LoadingView />;
+  if (status === 'denied') return <LocationDeniedScreen />;
+  if (status === 'pending' || loading) return <LoadingView />;
 
   if (empty) {
     return (
