@@ -42,7 +42,10 @@ feedRouter.get('/v1/feed', async (req, res) => {
       return;
     }
 
-    logger.info({ userId, count: (data || []).length, offset, radius_km }, 'Feed served');
+    logger.info(
+      { userId, count: (data || []).length, offset, radius_km, lat: coords.lat, lng: coords.lng },
+      'Feed served'
+    );
     res.json(data || []);
   } catch (err) {
     logger.error({ err, userId }, 'Feed unexpected error');

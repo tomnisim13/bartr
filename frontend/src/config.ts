@@ -19,6 +19,7 @@ export const config = {
   },
   location: {
     DEFAULT_RADIUS_KM: 100,
+    MAX_RADIUS_KM: 200,
     SIGNIFICANT_DISTANCE_CHANGE_METERS: 100,
   },
   // DEV: development tools config — remove before production

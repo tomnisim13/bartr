@@ -162,7 +162,7 @@ Returns paginated items excluding own items and already-interacted items.
 export const SRID_WGS84 = 4326;
 
 config.location = {
-  DEFAULT_RADIUS_KM: 50,
+  DEFAULT_RADIUS_KM: 100,
   MAX_RADIUS_KM: 200,
   SIGNIFICANT_DISTANCE_CHANGE_METERS: 100,
 };
@@ -216,11 +216,16 @@ Filters via `ST_DWithin(ul.location, point, radius_km * 1000)` and JOINs `user_l
 - Response now includes `distance_km` per item, ordered nearest-first
 
 ### Frontend Flow
+
+`useLocation` exposes a 4-state status: `pending | granted | fallback | denied`.
+
 1. App mounts → `useLocation` requests foreground permission
-2. Permission denied → `LocationDeniedScreen` (blocking, "Open Settings" button, re-checks on AppState active)
-3. Permission granted → captures coords, posts to `POST /v1/users/location`, subscribes to `watchPositionAsync`
-4. Coords passed to `useFeed` → included in every `fetchFeed` call
-5. On significant movement (>100 m) → re-posts location to backend (feed stays relevant)
+2. **Permission denied + last stored location available** (`GET /v1/users/location` returns 200) → status `'fallback'`, coords sourced from server, app proceeds (a soft banner can be shown by the caller)
+3. **Permission denied + no fallback** → status `'denied'` → `LocationDeniedScreen` (blocking, "Open Settings" button, re-checks on AppState `active`)
+4. **Permission granted** → captures coords (with last-stored fallback if GPS read fails), posts to `POST /v1/users/location`, subscribes via `watchPositionAsync`, status `'granted'`
+5. Coords passed to `useFeed` → included in every `fetchFeed` call
+6. On significant movement (≥ `SIGNIFICANT_DISTANCE_CHANGE_METERS`) → re-posts location to backend (feed stays relevant)
+7. While in `'denied'` or `'fallback'`, an `AppState` listener re-bootstraps the flow if the user grants permission via Settings and returns to the app
 
 ### Privacy Note
 - Only foreground location is used (no background tracking)
@@ -231,10 +236,10 @@ Filters via `ST_DWithin(ul.location, point, radius_km * 1000)` and JOINs `user_l
 
 | Rule | How Feature 3 follows it |
 |------|--------------------------|
-| **SRP** | `validation/location.ts` (pure validation), `routes/users.ts` (location endpoint), `hooks/useLocation.ts` (permission + watch) |
-| **Short functions** | Feed handler uses `parseFeedQuery` helper; validation is a single `parseLatLng` |
-| **Structured logging** | Every success/failure path logs with pino context object |
-| **Numeric enums** | `SRID_WGS84 = 4326` constant used instead of magic number |
+| **SRP** | `validation/location.ts` (lat/lng range), `validation/postgisPoint.ts` (POINT parser), `routes/users.ts` (HTTP only), `hooks/useLocation.ts` decomposed into `isPermissionGranted` / `fetchInitialCoords` / `fetchLastStoredCoords` / `postCoordsSafely` / `bootstrap` / `subscribeToMovement` |
+| **Short functions** | Feed handler uses `parseFeedQuery`; validation is a single `parseLatLng`; each `useLocation` helper is single-purpose |
+| **Structured logging** | Every success/failure path logs with pino context object — including DB error, empty-row, malformed-storage, and re-bootstrap-on-focus paths. No bare `catch {}`. |
+| **Numeric enums / strict constants** | `ItemStatus.AVAILABLE` referenced from `004_geolocation.sql` via comment. `SRID_WGS84 = 4326` referenced from migration as the SRID source. `ItemStatus` enum used in all test seeds. |
 
 ---
 
@@ -258,3 +263,6 @@ Filters via `ST_DWithin(ul.location, point, radius_km * 1000)` and JOINs `user_l
 | F3-T3 | users-location.test.ts | Invalid lat/lng → 400 | Integration |
 | F3-T4 | users-location.test.ts | Upsert idempotence (post twice, 1 row) | Integration |
 | F3-T5 | feed-geo.test.ts | Feed without lat/lng params → 400 | Integration |
+| F3-T6 | users-location-get.test.ts | GET returns 404 when no row stored | Integration |
+| F3-T7 | users-location-get.test.ts | GET returns 200 with parsed coords after upsert | Integration |
+| F3-T8 | postgisPoint.test.ts | Parser accepts valid POINT, rejects malformed/garbage | Unit |

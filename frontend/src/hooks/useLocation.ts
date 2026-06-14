@@ -1,11 +1,11 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { postLocation, getLastLocation } from '../api';
 import { config } from '../config';
 import { logger } from '../logger';
 
-export type LocationStatus = 'pending' | 'granted' | 'denied';
+export type LocationStatus = 'pending' | 'granted' | 'fallback' | 'denied';
 
 interface Coords {
   lat: number;
@@ -17,106 +17,115 @@ interface UseLocationResult {
   coords: Coords | null;
 }
 
+async function isPermissionGranted(): Promise<boolean> {
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  return status === 'granted';
+}
+
+async function fetchInitialCoords(): Promise<Coords | null> {
+  try {
+    const position = await Location.getCurrentPositionAsync({});
+    return { lat: position.coords.latitude, lng: position.coords.longitude };
+  } catch (err) {
+    logger.warn({ err: String(err) }, 'getCurrentPositionAsync failed');
+    return null;
+  }
+}
+
+async function fetchLastStoredCoords(): Promise<Coords | null> {
+  const last = await getLastLocation();
+  if (!last) return null;
+  return { lat: last.latitude, lng: last.longitude };
+}
+
+async function postCoordsSafely(coords: Coords, msg: string): Promise<void> {
+  try {
+    await postLocation(coords.lat, coords.lng);
+    logger.info({ lat: coords.lat, lng: coords.lng }, msg);
+  } catch (err) {
+    logger.error({ err: String(err), lat: coords.lat, lng: coords.lng }, `${msg}: post failed`);
+  }
+}
+
 export function useLocation(): UseLocationResult {
   const [status, setStatus] = useState<LocationStatus>('pending');
   const [coords, setCoords] = useState<Coords | null>(null);
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let mounted = true;
-
-    async function requestAndWatch() {
-      const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
-
-      if (!mounted) return;
-
-      if (permStatus !== 'granted') {
-        // Try fallback to last stored location
-        const last = await getLastLocation();
-        if (last && mounted) {
-          setCoords({ lat: last.latitude, lng: last.longitude });
-          setStatus('granted');
-          logger.info({ lat: last.latitude, lng: last.longitude }, 'Using last stored location (permission denied)');
-          return;
-        }
-        setStatus('denied');
-        return;
-      }
-
-      setStatus('granted');
-
-      let initial: { lat: number; lng: number };
-      try {
-        const position = await Location.getCurrentPositionAsync({});
-        initial = { lat: position.coords.latitude, lng: position.coords.longitude };
-      } catch {
-        // GPS unavailable — fall back to last stored location
-        const last = await getLastLocation();
-        if (last && mounted) {
-          setCoords({ lat: last.latitude, lng: last.longitude });
-          logger.info({ lat: last.latitude, lng: last.longitude }, 'Using last stored location (GPS unavailable)');
-          return;
-        }
-        if (mounted) setStatus('denied');
-        return;
-      }
-
-      if (!mounted) return;
-      setCoords(initial);
-
-      try {
-        await postLocation(initial.lat, initial.lng);
-        logger.info({ lat: initial.lat, lng: initial.lng }, 'Initial location posted');
-      } catch (err) {
-        logger.error({ err: String(err) }, 'Failed to post initial location');
-      }
-
-      subscriptionRef.current = await Location.watchPositionAsync(
-        { distanceInterval: config.location.SIGNIFICANT_DISTANCE_CHANGE_METERS },
-        async (loc) => {
-          const updated = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          if (mounted) setCoords(updated);
-          try {
-            await postLocation(updated.lat, updated.lng);
-            logger.info({ lat: updated.lat, lng: updated.lng }, 'Location updated (movement)');
-          } catch (err) {
-            logger.error({ err: String(err) }, 'Failed to post updated location');
-          }
-        }
-      );
-    }
-
-    requestAndWatch();
+    mountedRef.current = true;
+    bootstrap();
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       subscriptionRef.current?.remove();
+      subscriptionRef.current = null;
     };
+    // bootstrap captures only refs and module-scope helpers — safe to omit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-check permission when app returns to foreground (user may have enabled in Settings)
   useEffect(() => {
-    if (status !== 'denied') return;
+    if (status === 'granted' || status === 'pending') return;
 
-    const subscription = AppState.addEventListener('change', async (state) => {
-      if (state === 'active') {
-        const { status: permStatus } = await Location.getForegroundPermissionsAsync();
-        if (permStatus === 'granted') {
-          setStatus('pending');
-          // Will re-trigger the main effect via status change... but simpler to just reload
-          // For now, force a re-mount by setting pending then the effect won't re-run.
-          // The user needs to restart or we need a more complex approach.
-          // Simple: just set granted and get position
-          setStatus('granted');
-          const position = await Location.getCurrentPositionAsync({});
-          setCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
-          await postLocation(position.coords.latitude, position.coords.longitude);
-        }
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state !== 'active') return;
+      const { status: permStatus } = await Location.getForegroundPermissionsAsync();
+      if (permStatus === 'granted' && mountedRef.current) {
+        logger.info({}, 'Permission granted on app focus — re-bootstrapping location');
+        await bootstrap();
       }
     });
 
-    return () => subscription.remove();
+    return () => sub.remove();
   }, [status]);
+
+  async function bootstrap(): Promise<void> {
+    const granted = await isPermissionGranted();
+    if (!mountedRef.current) return;
+
+    if (!granted) {
+      const fallback = await fetchLastStoredCoords();
+      if (!mountedRef.current) return;
+      if (fallback) {
+        logger.info({ lat: fallback.lat, lng: fallback.lng }, 'Using last stored location (permission denied)');
+        setCoords(fallback);
+        setStatus('fallback');
+      } else {
+        logger.warn({}, 'Location permission denied and no fallback available');
+        setStatus('denied');
+      }
+      return;
+    }
+
+    const initial = (await fetchInitialCoords()) ?? (await fetchLastStoredCoords());
+    if (!mountedRef.current) return;
+
+    if (!initial) {
+      logger.error({}, 'Permission granted but no coords obtainable');
+      setStatus('denied');
+      return;
+    }
+
+    setCoords(initial);
+    setStatus('granted');
+    await postCoordsSafely(initial, 'Initial location posted');
+    await subscribeToMovement();
+  }
+
+  async function subscribeToMovement(): Promise<void> {
+    subscriptionRef.current?.remove();
+    subscriptionRef.current = await Location.watchPositionAsync(
+      { distanceInterval: config.location.SIGNIFICANT_DISTANCE_CHANGE_METERS },
+      async (loc) => {
+        const updated = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        if (!mountedRef.current) return;
+        setCoords(updated);
+        await postCoordsSafely(updated, 'Location updated (movement)');
+      }
+    );
+  }
 
   return { status, coords };
 }

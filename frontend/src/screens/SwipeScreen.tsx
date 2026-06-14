@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import { ItemCard } from '../components/ItemCard';
@@ -18,7 +18,6 @@ export function SwipeScreen() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [swiperKey, setSwiperKey] = useState(0);
-  const swiperRef = useRef<any>(null);
 
   const onCleared = () => {
     setSwiperKey(prev => prev + 1);
@@ -35,6 +34,8 @@ export function SwipeScreen() {
 
   if (status === 'denied') return <LocationDeniedScreen />;
   if (status === 'pending' || loading) return <LoadingView />;
+  // 'granted' and 'fallback' both fall through; 'fallback' means we're using the last stored
+  // location because OS permission was denied. UI can later surface a subtle banner here.
 
   if (empty) {
     return (
@@ -53,7 +54,6 @@ export function SwipeScreen() {
       <View style={styles.swiperContainer}>
         <Swiper
           key={swiperKey}
-          ref={swiperRef}
           cards={cards}
           cardIndex={0}
           renderCard={(item: Item) =>

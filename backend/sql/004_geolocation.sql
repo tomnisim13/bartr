@@ -1,9 +1,10 @@
 -- Feature 3: Geo-Location Filtering
 -- Requires PostGIS extension. Apply via Supabase SQL Editor.
+-- SRID 4326 == SRID_WGS84 in backend/src/config.ts and frontend/src/config.ts.
 
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- User location table
+-- User location table. SRID 4326 (WGS84) — see SRID_WGS84 constant in config.ts.
 CREATE TABLE user_locations (
   user_id UUID PRIMARY KEY,
   location GEOGRAPHY(Point, 4326) NOT NULL,
@@ -42,7 +43,7 @@ CREATE FUNCTION get_feed(
     ST_Distance(ul.location, ST_MakePoint(user_lng, user_lat)::geography) / 1000.0 AS distance_km
   FROM items i
   JOIN user_locations ul ON ul.user_id = i.user_id
-  WHERE i.status = 1
+  WHERE i.status = 1            -- ItemStatus.AVAILABLE (kept in sync with config.ts)
     AND i.user_id != current_user_id
     AND NOT EXISTS (
       SELECT 1 FROM interactions x

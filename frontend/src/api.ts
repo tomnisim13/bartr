@@ -1,4 +1,5 @@
 import { config, InteractionType } from './config';
+import { logger } from './logger';
 import { Item } from './types';
 
 export async function fetchFeed(lat: number, lng: number, offset = 0, radiusKm?: number): Promise<Item[]> {
@@ -21,9 +22,14 @@ export async function postInteraction(itemId: number, type: InteractionType): Pr
 export async function getLastLocation(): Promise<{ latitude: number; longitude: number } | null> {
   try {
     const response = await fetch(`${config.apiUrl}/v1/users/location`);
-    if (!response.ok) return null;
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      logger.warn({ status: response.status }, 'getLastLocation: non-OK response');
+      return null;
+    }
     return response.json();
-  } catch {
+  } catch (err) {
+    logger.error({ err: String(err) }, 'getLastLocation: network failure');
     return null;
   }
 }
