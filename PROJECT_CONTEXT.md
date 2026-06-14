@@ -45,16 +45,20 @@ bartr/
 │   │   ├── loadEnv.ts           # Side-effect: dotenv.config(); imported first
 │   │   ├── supabase.ts          # Supabase client (single source)
 │   │   ├── logger.ts            # pino logger (pretty in dev, JSON in prod)
-│   │   ├── config.ts            # Numeric enums + runtime config
+│   │   ├── config.ts            # Numeric enums + SRID_WGS84 + runtime config
 │   │   ├── constants.ts         # DEMO_USER_ID, POSTGRES_UNIQUE_VIOLATION
 │   │   ├── routes/
-│   │   │   ├── feed.ts          # GET  /v1/feed
+│   │   │   ├── feed.ts          # GET  /v1/feed              (geo-filtered)
 │   │   │   ├── interactions.ts  # POST /v1/interactions
 │   │   │   ├── items.ts         # POST /items
-│   │   │   └── dev.ts           # DELETE /v1/dev/clear  (DEV only)
-│   │   └── __tests__/           # vitest + supertest suites
-│   ├── sql/                     # Migrations (002_core_swiping.sql, ...)
-│   ├── vitest.config.ts
+│   │   │   ├── users.ts         # GET/POST /v1/users/location
+│   │   │   └── dev.ts           # DELETE /v1/dev/clear        (DEV only)
+│   │   ├── validation/
+│   │   │   ├── location.ts      # parseLatLng (lat/lng range + finite checks)
+│   │   │   └── postgisPoint.ts  # parsePostgisPoint (WKT + Supabase EWKB hex)
+│   │   └── __tests__/           # vitest + supertest suites (31 tests)
+│   ├── sql/                     # Migrations (002, 003, 004_geolocation.sql)
+│   ├── vitest.config.ts         # fileParallelism: false (shared Supabase DB)
 │   ├── tsconfig.json
 │   ├── package.json
 │   └── .env.example             # Supabase credentials template
@@ -64,17 +68,19 @@ bartr/
 │   ├── index.ts                 # Entry point
 │   ├── src/
 │   │   ├── api.ts               # Backend HTTP client
-│   │   ├── config.ts            # Numeric enums + runtime config
-│   │   ├── types.ts             # Shared types (Item)
+│   │   ├── config.ts            # Numeric enums + SRID_WGS84 + runtime config
+│   │   ├── types.ts             # Shared types (Item, distance_km)
 │   │   ├── logger.ts            # Structured console wrapper
 │   │   ├── itemImages.ts        # Local image registry
 │   │   ├── screens/
-│   │   │   └── SwipeScreen.tsx  # Thin orchestrator (uses hooks)
+│   │   │   ├── SwipeScreen.tsx           # Thin orchestrator (uses hooks)
+│   │   │   └── LocationDeniedScreen.tsx  # Blocking screen + Open Settings
 │   │   ├── hooks/
 │   │   │   ├── useFeed.ts       # Feed loading + swipe recording
-│   │   │   └── useClearAll.ts   # DEV clear-all workflow
+│   │   │   ├── useClearAll.ts   # DEV clear-all workflow
+│   │   │   └── useLocation.ts   # Permission + GPS + last-location fallback
 │   │   └── components/
-│   │       ├── ItemCard.tsx
+│   │       ├── ItemCard.tsx     # Includes distance badge
 │   │       ├── ItemImage.tsx    # Local / remote / placeholder resolver
 │   │       ├── DetailModal.tsx
 │   │       ├── EmptyState.tsx
@@ -92,9 +98,10 @@ bartr/
 ## Conventions
 
 - **DEV** — Comments/code marked with `DEV` are temporary development tools, dummy data, or placeholder logic. These must be removed or replaced before production release.
-- **Numeric enums** — `ItemStatus` (`AVAILABLE=1`, `TRADED=2`, `ARCHIVED=3`) and `InteractionType` (`DISLIKE=0`, `LIKE=1`) are the only allowed values for `items.status` and `interactions.type` in code, tests, and types. No raw `1` / `3` literals — always reference the enum. Defined in both `backend/src/config.ts` and `frontend/src/config.ts` (single shared package is a future improvement).
+- **Numeric enums & strict constants** — `ItemStatus` (`AVAILABLE=1`, `TRADED=2`, `ARCHIVED=3`) and `InteractionType` (`DISLIKE=0`, `LIKE=1`) are the only allowed values for `items.status` and `interactions.type` in code, tests, and types. No raw `1` / `3` literals — always reference the enum. `SRID_WGS84 = 4326` is referenced by name from the PostGIS migration. Defined in both `backend/src/config.ts` and `frontend/src/config.ts` (single shared package is a future improvement).
 - **Structured logging** — All backend critical paths (request entry, DB success/failure, validation rejections, unexpected errors) log via `pino` with a context object: `logger.info({ userId, count }, 'Feed served')`. In production (`NODE_ENV=production`) logs are JSON; in dev they go through `pino-pretty`. Frontend uses a thin `logger` wrapper around `console` (`frontend/src/logger.ts`) that emits structured records — never use bare `catch {}`; always log the error.
-- **SRP** — One responsibility per module. Routes live under `routes/<resource>.ts`. Express handlers do request parsing → validation → repository call → log → respond, and nothing else. Frontend screens are thin orchestrators; data/effect logic lives in hooks under `src/hooks/`.
+- **SRP** — One responsibility per module. Routes live under `routes/<resource>.ts`. Validators live under `validation/<concern>.ts`. Express handlers do request parsing → validation → repository call → log → respond, and nothing else. Frontend screens are thin orchestrators; data/effect logic lives in hooks under `src/hooks/`. Hooks are decomposed into named single-purpose async helpers (e.g. `useLocation` → `isPermissionGranted` / `fetchInitialCoords` / `fetchLastStoredCoords` / `postCoordsSafely` / `subscribeToMovement`).
+- **Testing** — Backend tests run serially (`fileParallelism: false`) because they share one Supabase DB and the hardcoded `DEMO_USER_ID`. Each `describe` cleans its own seeded rows.
 
 ## Current Status
 
@@ -106,13 +113,19 @@ bartr/
 - [x] Swipe UI (Tinder-like cards) — `react-native-deck-swiper`, info modal, empty state, prefetch
 - [x] Backend feed endpoint (`GET /v1/feed`) with DB-level filtering via `get_feed` RPC
 - [x] Interactions endpoint (`POST /v1/interactions`) with 409 duplicate handling
-- [x] Backend test suite (vitest + supertest, 11 tests across feed / interactions / validation / errors)
 - [x] Structured logging (`pino` backend, console wrapper frontend)
 - [x] DEV `/v1/dev/clear` endpoint + Clear-All button for fresh-start during development
+- [x] **Geo-location filtering** — PostGIS `user_locations` table, GIST index, geo-aware `get_feed` RPC with `ST_DWithin` + `distance_km`
+- [x] `POST /v1/users/location` (upsert) and `GET /v1/users/location` (last-known fallback) endpoints
+- [x] `useLocation` hook with 4-state status (`pending` / `granted` / `fallback` / `denied`), `watchPositionAsync` threshold sync, AppState re-bootstrap
+- [x] `LocationDeniedScreen` with "Open Settings" deep link
+- [x] Distance badge on item cards (`distance_km` rounded to 1 decimal)
+- [x] Backend test suite — **31 tests** across feed / interactions / validation / errors / feed-geo / users-location / postgisPoint
 - [ ] User authentication (Supabase Auth) — currently hardcoded `DEMO_USER_ID`
 - [ ] Item listing with photos (upload UI)
 - [ ] Request-correlation IDs in backend logs (`pino-http`)
-- [ ] Shared package for `ItemStatus` / `InteractionType` (currently duplicated)
+- [ ] Shared package for `ItemStatus` / `InteractionType` / `config.location` (currently duplicated backend ↔ frontend)
+- [ ] Frontend hook unit tests (`useLocation`, `useFeed`) — needs `@testing-library/react-native`
 - [ ] Matching engine (double-coincidence)
 - [ ] Points/valuation system
 - [ ] Chat between matched users
