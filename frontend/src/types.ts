@@ -8,4 +8,5 @@ export interface Item {
   status: ItemStatus;
   image_url: string | null;
   created_at: string;
+  distance_km?: number;
 }

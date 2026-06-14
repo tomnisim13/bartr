@@ -5,6 +5,11 @@ import { InteractionType, config } from '../config';
 import { logger } from '../logger';
 import { Item } from '../types';
 
+interface Coords {
+  lat: number;
+  lng: number;
+}
+
 interface UseFeedResult {
   cards: Item[];
   loading: boolean;
@@ -15,17 +20,22 @@ interface UseFeedResult {
   resetCards: () => void;
 }
 
-export function useFeed(): UseFeedResult {
+export function useFeed(coords: Coords | null): UseFeedResult {
   const [cards, setCards] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [empty, setEmpty] = useState(false);
   const cardsRef = useRef<Item[]>([]);
+  const coordsRef = useRef<Coords | null>(coords);
 
   cardsRef.current = cards;
+  coordsRef.current = coords;
 
   const loadFeed = useCallback(async (offset: number) => {
+    const c = coordsRef.current;
+    if (!c) return;
+
     try {
-      const items = await fetchFeed(offset);
+      const items = await fetchFeed(c.lat, c.lng, offset);
       if (items.length === 0 && offset === 0) {
         setEmpty(true);
       } else {
@@ -41,8 +51,8 @@ export function useFeed(): UseFeedResult {
   }, []);
 
   useEffect(() => {
-    loadFeed(0);
-  }, [loadFeed]);
+    if (coords) loadFeed(0);
+  }, [coords?.lat, coords?.lng, loadFeed]);
 
   const recordSwipe = useCallback(async (index: number, type: InteractionType) => {
     const item = cardsRef.current[index];
