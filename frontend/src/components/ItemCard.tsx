@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { Item } from '../types';
-import { getLocalImage } from '../itemImages';
+import { ItemImage } from './ItemImage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -13,12 +13,7 @@ interface Props {
 export function ItemCard({ item, onInfoPress }: Props) {
   return (
     <View style={styles.card}>
-      {(() => {
-        const localImg = getLocalImage(item.image_url);
-        if (localImg) return <Image source={localImg} style={styles.image} />;
-        if (item.image_url) return <Image source={{ uri: item.image_url }} style={styles.image} />;
-        return <View style={[styles.image, styles.placeholder]} />;
-      })()}
+      <ItemImage imageUrl={item.image_url} style={styles.image} />
       <View style={styles.infoContainer}>
         <View style={styles.textRow}>
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
@@ -49,10 +44,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '75%',
     backgroundColor: '#f0f0f0',
-  },
-  placeholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   infoContainer: {
     flex: 1,

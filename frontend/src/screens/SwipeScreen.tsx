@@ -1,109 +1,43 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator, Pressable } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import { ItemCard } from '../components/ItemCard';
 import { DetailModal } from '../components/DetailModal';
 import { EmptyState } from '../components/EmptyState';
-import { fetchFeed, postInteraction, clearAllInteractions } from '../api';
+import { ClearAllButton } from '../components/ClearAllButton';
+import { useFeed } from '../hooks/useFeed';
+import { useClearAll } from '../hooks/useClearAll';
 import { InteractionType, config } from '../config';
 import { Item } from '../types';
 
 export function SwipeScreen() {
-  const [cards, setCards] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [empty, setEmpty] = useState(false);
+  const { cards, loading, empty, reload, recordSwipe, markEmpty } = useFeed();
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [swiperKey, setSwiperKey] = useState(0);
-  const [clearing, setClearing] = useState(false);
   const swiperRef = useRef<any>(null);
 
-  const loadFeed = useCallback(async (offset = 0) => {
-    try {
-      const items = await fetchFeed(offset);
-      if (items.length === 0 && offset === 0) {
-        setEmpty(true);
-      } else {
-        setCards(prev => offset === 0 ? items : [...prev, ...items]);
-      }
-    } catch {
-      if (cards.length === 0) setEmpty(true);
-      Alert.alert('Network Error', 'Unable to update feed at this moment.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadFeed();
-  }, [loadFeed]);
-
-  const handleSwipe = async (index: number, type: InteractionType) => {
-    const item = cards[index];
-    if (!item) return;
-
-    try {
-      await postInteraction(item.id, type);
-    } catch {
-      // Silently fail — interaction will be missing but UX continues
-    }
-
-    const remaining = cards.length - (index + 1);
-    if (remaining <= config.feed.prefetchThreshold) {
-      loadFeed(cards.length);
-    }
+  const onCleared = () => {
+    setSwiperKey(prev => prev + 1);
+    reload();
   };
 
-  const handleSwipedRight = (index: number) => handleSwipe(index, InteractionType.LIKE);
-  const handleSwipedLeft = (index: number) => handleSwipe(index, InteractionType.DISLIKE);
+  const emptyClearAll = useClearAll({ onCleared, confirm: false });
+  const mainClearAll = useClearAll({ onCleared, confirm: true });
 
-  const handleSwipedAll = () => {
-    setEmpty(true);
+  const onInfoPress = (item: Item) => {
+    setSelectedItem(item);
+    setModalVisible(true);
   };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6c47ff" />
-      </View>
-    );
-  }
+  if (loading) return <LoadingView />;
 
   if (empty) {
     return (
       <View style={styles.center}>
         <EmptyState />
         {config.dev.enableClearAll && (
-          <Pressable
-            style={styles.clearButton}
-            disabled={clearing}
-            onPress={async () => {
-              try {
-                setClearing(true);
-                await clearAllInteractions();
-                setClearing(false);
-                Alert.alert('Done', 'All interactions cleared!', [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      setEmpty(false);
-                      setLoading(true);
-                      loadFeed();
-                    },
-                  },
-                ]);
-              } catch {
-                setClearing(false);
-                Alert.alert('Error', 'Failed to clear data. Check backend is running.');
-              }
-            }}
-          >
-            {clearing ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.clearButtonText}>Clear All</Text>
-            )}
-          </Pressable>
+          <ClearAllButton clearing={emptyClearAll.clearing} onPress={emptyClearAll.trigger} />
         )}
       </View>
     );
@@ -119,19 +53,11 @@ export function SwipeScreen() {
           cards={cards}
           cardIndex={0}
           renderCard={(item: Item) =>
-            item ? (
-              <ItemCard
-                item={item}
-                onInfoPress={() => {
-                  setSelectedItem(item);
-                  setModalVisible(true);
-                }}
-              />
-            ) : null
+            item ? <ItemCard item={item} onInfoPress={() => onInfoPress(item)} /> : null
           }
-          onSwipedRight={handleSwipedRight}
-          onSwipedLeft={handleSwipedLeft}
-          onSwipedAll={handleSwipedAll}
+          onSwipedRight={(i: number) => recordSwipe(i, InteractionType.LIKE)}
+          onSwipedLeft={(i: number) => recordSwipe(i, InteractionType.DISLIKE)}
+          onSwipedAll={markEmpty}
           stackSize={3}
           stackSeparation={12}
           animateCardOpacity
@@ -140,17 +66,11 @@ export function SwipeScreen() {
           overlayLabels={{
             left: {
               title: '🗑️',
-              style: {
-                label: styles.overlayLabelLeft,
-                wrapper: styles.overlayWrapperLeft,
-              },
+              style: { label: styles.overlayLabelLeft, wrapper: styles.overlayWrapperLeft },
             },
             right: {
               title: '🛒',
-              style: {
-                label: styles.overlayLabelRight,
-                wrapper: styles.overlayWrapperRight,
-              },
+              style: { label: styles.overlayLabelRight, wrapper: styles.overlayWrapperRight },
             },
           }}
         />
@@ -160,53 +80,21 @@ export function SwipeScreen() {
         <Text style={styles.iconLabel}>🛒</Text>
       </View>
       {config.dev.enableClearAll && (
-        <Pressable
-          style={styles.clearButton}
-          disabled={clearing}
-          onPress={() => {
-            Alert.alert('Clear All', 'Reset all interactions and start fresh?', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Clear',
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    setClearing(true);
-                    await clearAllInteractions();
-                    setClearing(false);
-                    Alert.alert('Done', 'All interactions cleared!', [
-                      {
-                        text: 'OK',
-                        onPress: () => {
-                          setCards([]);
-                          setEmpty(false);
-                          setSwiperKey(prev => prev + 1);
-                          setLoading(true);
-                          loadFeed();
-                        },
-                      },
-                    ]);
-                  } catch {
-                    setClearing(false);
-                    Alert.alert('Error', 'Failed to clear data. Check backend is running.');
-                  }
-                },
-              },
-            ]);
-          }}
-        >
-          {clearing ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.clearButtonText}>Clear All</Text>
-          )}
-        </Pressable>
+        <ClearAllButton clearing={mainClearAll.clearing} onPress={mainClearAll.trigger} />
       )}
       <DetailModal
         item={selectedItem}
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
       />
+    </View>
+  );
+}
+
+function LoadingView() {
+  return (
+    <View style={styles.center}>
+      <ActivityIndicator size="large" color="#6c47ff" />
     </View>
   );
 }
@@ -261,19 +149,5 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     marginTop: 20,
     marginLeft: 20,
-  },
-  clearButton: {
-    alignSelf: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    marginBottom: 20,
-    backgroundColor: '#ff4444',
-    borderRadius: 8,
-    zIndex: 999,
-  },
-  clearButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
   },
 });

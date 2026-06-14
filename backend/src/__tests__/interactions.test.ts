@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, supabase } from '../app';
+import { InteractionType, ItemStatus } from '../config';
 
 const TEST_USER = '00000000-0000-0000-0000-000000000098';
 const DEMO_USER = '00000000-0000-0000-0000-000000000001';
@@ -11,7 +12,7 @@ describe('POST /v1/interactions', () => {
   beforeAll(async () => {
     const { data } = await supabase
       .from('items')
-      .insert({ user_id: TEST_USER, name: 'Interaction Test Item', points_value: 10, status: 1 })
+      .insert({ user_id: TEST_USER, name: 'Interaction Test Item', points_value: 10, status: ItemStatus.AVAILABLE })
       .select('id')
       .single();
     itemId = data!.id;
@@ -25,7 +26,7 @@ describe('POST /v1/interactions', () => {
   it('creates an interaction successfully', async () => {
     const res = await request(app)
       .post('/v1/interactions')
-      .send({ item_id: itemId, type: 1 });
+      .send({ item_id: itemId, type: InteractionType.LIKE });
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
@@ -34,7 +35,7 @@ describe('POST /v1/interactions', () => {
   it('returns 409 on duplicate interaction', async () => {
     const res = await request(app)
       .post('/v1/interactions')
-      .send({ item_id: itemId, type: 1 });
+      .send({ item_id: itemId, type: InteractionType.LIKE });
 
     expect(res.status).toBe(409);
   });

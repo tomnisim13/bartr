@@ -39,26 +39,62 @@ Physical handovers are confirmed via QR code scanning — both parties scan to m
 ```
 bartr/
 ├── backend/
-│   ├── src/server.ts      # Express API server
-│   ├── package.json
+│   ├── src/
+│   │   ├── server.ts            # Process entry — listens on :3000
+│   │   ├── app.ts               # Express assembler (middleware + mounts routers)
+│   │   ├── loadEnv.ts           # Side-effect: dotenv.config(); imported first
+│   │   ├── supabase.ts          # Supabase client (single source)
+│   │   ├── logger.ts            # pino logger (pretty in dev, JSON in prod)
+│   │   ├── config.ts            # Numeric enums + runtime config
+│   │   ├── constants.ts         # DEMO_USER_ID, POSTGRES_UNIQUE_VIOLATION
+│   │   ├── routes/
+│   │   │   ├── feed.ts          # GET  /v1/feed
+│   │   │   ├── interactions.ts  # POST /v1/interactions
+│   │   │   ├── items.ts         # POST /items
+│   │   │   └── dev.ts           # DELETE /v1/dev/clear  (DEV only)
+│   │   └── __tests__/           # vitest + supertest suites
+│   ├── sql/                     # Migrations (002_core_swiping.sql, ...)
+│   ├── vitest.config.ts
 │   ├── tsconfig.json
-│   └── .env.example       # Supabase credentials template
+│   ├── package.json
+│   └── .env.example             # Supabase credentials template
 ├── frontend/
-│   ├── App.tsx             # Main app component
-│   ├── app.json            # Expo config
-│   ├── index.ts            # Entry point
+│   ├── App.tsx                  # Root component
+│   ├── app.json                 # Expo config
+│   ├── index.ts                 # Entry point
+│   ├── src/
+│   │   ├── api.ts               # Backend HTTP client
+│   │   ├── config.ts            # Numeric enums + runtime config
+│   │   ├── types.ts             # Shared types (Item)
+│   │   ├── logger.ts            # Structured console wrapper
+│   │   ├── itemImages.ts        # Local image registry
+│   │   ├── screens/
+│   │   │   └── SwipeScreen.tsx  # Thin orchestrator (uses hooks)
+│   │   ├── hooks/
+│   │   │   ├── useFeed.ts       # Feed loading + swipe recording
+│   │   │   └── useClearAll.ts   # DEV clear-all workflow
+│   │   └── components/
+│   │       ├── ItemCard.tsx
+│   │       ├── ItemImage.tsx    # Local / remote / placeholder resolver
+│   │       ├── DetailModal.tsx
+│   │       ├── EmptyState.tsx
+│   │       └── ClearAllButton.tsx
 │   └── package.json
 ├── .githooks/
-│   └── pre-commit          # Context sync reminder
-├── PROJECT_CONTEXT.md      # This file (source of truth)
+│   └── pre-commit               # Context sync reminder
+├── ARCHITECTURE.md
+├── PROJECT_CONTEXT.md           # This file (source of truth)
 ├── README.md
-├── .nvmrc                  # Node 22
+├── .nvmrc                       # Node 22
 └── .gitignore
 ```
 
 ## Conventions
 
 - **DEV** — Comments/code marked with `DEV` are temporary development tools, dummy data, or placeholder logic. These must be removed or replaced before production release.
+- **Numeric enums** — `ItemStatus` (`AVAILABLE=1`, `TRADED=2`, `ARCHIVED=3`) and `InteractionType` (`DISLIKE=0`, `LIKE=1`) are the only allowed values for `items.status` and `interactions.type` in code, tests, and types. No raw `1` / `3` literals — always reference the enum. Defined in both `backend/src/config.ts` and `frontend/src/config.ts` (single shared package is a future improvement).
+- **Structured logging** — All backend critical paths (request entry, DB success/failure, validation rejections, unexpected errors) log via `pino` with a context object: `logger.info({ userId, count }, 'Feed served')`. In production (`NODE_ENV=production`) logs are JSON; in dev they go through `pino-pretty`. Frontend uses a thin `logger` wrapper around `console` (`frontend/src/logger.ts`) that emits structured records — never use bare `catch {}`; always log the error.
+- **SRP** — One responsibility per module. Routes live under `routes/<resource>.ts`. Express handlers do request parsing → validation → repository call → log → respond, and nothing else. Frontend screens are thin orchestrators; data/effect logic lives in hooks under `src/hooks/`.
 
 ## Current Status
 
@@ -67,9 +103,16 @@ bartr/
 - [x] Frontend: Expo app with test button
 - [x] Supabase: items table with RLS policy
 - [x] Git repo initialized, pushed to github.com/tomnisim13/bartr
-- [ ] User authentication (Supabase Auth)
-- [ ] Item listing with photos
-- [ ] Swipe UI (Tinder-like cards)
+- [x] Swipe UI (Tinder-like cards) — `react-native-deck-swiper`, info modal, empty state, prefetch
+- [x] Backend feed endpoint (`GET /v1/feed`) with DB-level filtering via `get_feed` RPC
+- [x] Interactions endpoint (`POST /v1/interactions`) with 409 duplicate handling
+- [x] Backend test suite (vitest + supertest, 11 tests across feed / interactions / validation / errors)
+- [x] Structured logging (`pino` backend, console wrapper frontend)
+- [x] DEV `/v1/dev/clear` endpoint + Clear-All button for fresh-start during development
+- [ ] User authentication (Supabase Auth) — currently hardcoded `DEMO_USER_ID`
+- [ ] Item listing with photos (upload UI)
+- [ ] Request-correlation IDs in backend logs (`pino-http`)
+- [ ] Shared package for `ItemStatus` / `InteractionType` (currently duplicated)
 - [ ] Matching engine (double-coincidence)
 - [ ] Points/valuation system
 - [ ] Chat between matched users
