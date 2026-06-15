@@ -25,8 +25,9 @@ INSERT INTO user_profiles (user_id, display_name) VALUES
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Dani')
 ON CONFLICT (user_id) DO UPDATE SET display_name = EXCLUDED.display_name;
 
--- 3. Locations for the new dev users (Tel Aviv area, within 100km of DEMO swiper)
+-- 3. Locations for all dev users including DEMO (Tel Aviv area)
 INSERT INTO user_locations (user_id, location, updated_at) VALUES
+  ('00000000-0000-0000-0000-000000000001', ST_MakePoint(34.78, 32.08)::geography, now()),
   ('11111111-1111-1111-1111-111111111111', ST_MakePoint(34.78, 32.08)::geography, now()),
   ('22222222-2222-2222-2222-222222222222', ST_MakePoint(34.79, 32.09)::geography, now()),
   ('33333333-3333-3333-3333-333333333333', ST_MakePoint(34.77, 32.07)::geography, now())

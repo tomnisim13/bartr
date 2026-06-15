@@ -35,7 +35,10 @@ export function useFeed(coords: Coords | null): UseFeedResult {
 
   const loadFeed = useCallback(async (offset: number) => {
     const c = coordsRef.current;
-    if (!c) return;
+    if (!c) {
+      setLoading(false);
+      return;
+    }
 
     try {
       const items = await fetchFeed(c.lat, c.lng, offset);
