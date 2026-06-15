@@ -22,8 +22,13 @@ export const config = {
     MAX_RADIUS_KM: 200,
     SIGNIFICANT_DISTANCE_CHANGE_METERS: 100,
   },
-  // DEV: development tools config — remove before production
+  // Identity bootstrap (replaced by auth in production)
   dev: {
-    enableClearAll: true,
+    currentUserId: '00000000-0000-0000-0000-000000000001',
+  },
+  // Debug visibility flags. INVARIANT: every flag here must be false in production.
+  debug: {
+    ENABLE_CLEAR_ALL_BUTTON: true,
+    SHOW_OWNER_DEBUG: true,
   },
 };

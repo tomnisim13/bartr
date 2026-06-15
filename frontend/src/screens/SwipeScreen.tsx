@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import { ItemCard } from '../components/ItemCard';
 import { DetailModal } from '../components/DetailModal';
+import { MatchModal } from '../components/MatchModal';
 import { EmptyState } from '../components/EmptyState';
 import { ClearAllButton } from '../components/ClearAllButton';
 import { LocationDeniedScreen } from './LocationDeniedScreen';
@@ -10,11 +11,12 @@ import { useLocation } from '../hooks/useLocation';
 import { useFeed } from '../hooks/useFeed';
 import { useClearAll } from '../hooks/useClearAll';
 import { InteractionType, config } from '../config';
+import { logger } from '../logger';
 import { Item } from '../types';
 
 export function SwipeScreen() {
   const { status, coords } = useLocation();
-  const { cards, loading, empty, reload, recordSwipe, markEmpty } = useFeed(coords);
+  const { cards, loading, empty, lastMatch, reload, recordSwipe, markEmpty, clearLastMatch } = useFeed(coords);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [swiperKey, setSwiperKey] = useState(0);
@@ -32,6 +34,13 @@ export function SwipeScreen() {
     setModalVisible(true);
   };
 
+  const onSendMessage = () => {
+    // Placeholder routing: messaging screen lands in Feature 5.
+    logger.info({ matchId: lastMatch?.match_id }, 'Match modal: send message tapped');
+    Alert.alert('Coming soon', 'Messaging will be available in the next release.');
+    clearLastMatch();
+  };
+
   if (status === 'denied') return <LocationDeniedScreen />;
   if (status === 'pending' || loading) return <LoadingView />;
   // 'granted' and 'fallback' both fall through; 'fallback' means we're using the last stored
@@ -41,7 +50,7 @@ export function SwipeScreen() {
     return (
       <View style={styles.center}>
         <EmptyState />
-        {config.dev.enableClearAll && (
+        {config.debug.ENABLE_CLEAR_ALL_BUTTON && (
           <ClearAllButton clearing={emptyClearAll.clearing} onPress={emptyClearAll.trigger} />
         )}
       </View>
@@ -83,13 +92,18 @@ export function SwipeScreen() {
         <Text style={styles.iconLabel}>🗑️</Text>
         <Text style={styles.iconLabel}>🛒</Text>
       </View>
-      {config.dev.enableClearAll && (
+      {config.debug.ENABLE_CLEAR_ALL_BUTTON && (
         <ClearAllButton clearing={mainClearAll.clearing} onPress={mainClearAll.trigger} />
       )}
       <DetailModal
         item={selectedItem}
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
+      />
+      <MatchModal
+        visible={!!lastMatch?.is_match}
+        onClose={clearLastMatch}
+        onSendMessage={onSendMessage}
       />
     </View>
   );

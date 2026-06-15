@@ -136,7 +136,7 @@ Returns paginated items excluding own items and already-interacted items.
 - Info modal on "i" tap
 - Pre-fetch next batch when remaining cards ≤ `config.feed.prefetchThreshold` (default 5)
 - Empty state: "Oops, looks like you've swiped on everything nearby!"
-- DEV: Clear-All button (`config.dev.enableClearAll`) calls `DELETE /v1/dev/clear` and reloads the feed
+- DEV: Clear-All button (`config.debug.ENABLE_CLEAR_ALL_BUTTON`) calls `DELETE /v1/dev/clear` and reloads the feed
 - All catch blocks log via the structured `logger` (no silent failures)
 
 ### Edge Cases
@@ -243,6 +243,130 @@ Filters via `ST_DWithin(ul.location, point, radius_km * 1000)` and JOINs `user_l
 
 ---
 
+## Feature 4: Match Engine & Seed Data
+
+### User Stories
+- **Mutual Like = Match**: When User A likes an item from User B, and User B has already liked an item from User A, a match is created automatically.
+- **Match Celebration**: A modal overlay appears on the swiper when a match occurs ("It's a Match!").
+- **Match List**: Users can view their matches via `GET /v1/matches`.
+- **Multi-user Dev Testing**: An `X-User-Id` header (dev only) allows swapping identity without auth, enabling manual two-user match testing.
+
+### Config
+
+```typescript
+// frontend/src/config.ts
+config.dev = { currentUserId: DEMO_USER_ID }; // swap to test as another user
+config.debug = { ENABLE_CLEAR_ALL_BUTTON: true, SHOW_OWNER_DEBUG: true };
+```
+
+### Database Schema (005_matches.sql)
+
+```sql
+CREATE TABLE matches (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_one_id UUID NOT NULL,
+  user_two_id UUID NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+  CONSTRAINT matches_canonical_pair CHECK (user_one_id < user_two_id),
+  CONSTRAINT matches_unique_pair UNIQUE (user_one_id, user_two_id)
+);
+CREATE INDEX idx_matches_user_search ON matches (user_one_id, user_two_id);
+```
+
+Canonical ordering (`user_one_id < user_two_id`) prevents duplicate match rows regardless of who swipes second.
+
+### `record_interaction` RPC
+
+```sql
+CREATE FUNCTION record_interaction(
+  swiper_id UUID, item_id BIGINT, interaction_type SMALLINT
+) RETURNS TABLE (success BOOLEAN, is_match BOOLEAN, match_id BIGINT)
+```
+
+Single transaction: inserts interaction → if LIKE, checks for mutual like → if mutual, inserts match row. Returns `success=false` on duplicate (23505). Returns `is_match=true` + `match_id` when a match is created.
+
+### Seed Data (006_seed_match_users.dev.sql)
+
+Two synthetic users with items in Tel Aviv (within radius of DEMO_USER_ID):
+- `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa` — "Yossi Acoustic Guitar"
+- `bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb` — "Dani Leather Jacket"
+
+### API Endpoints
+
+#### POST /v1/interactions (updated)
+- Now calls `record_interaction` RPC instead of direct insert
+- Response: `{ success: true, is_match: boolean, match_id?: number }`
+- Logs: `Interaction recorded` / `Match created` / `Duplicate interaction attempted`
+
+#### GET /v1/matches (new)
+- Returns current user's matches ordered by `created_at DESC`
+- Response: array of match objects
+
+### X-User-Id Middleware (dev only)
+- Reads `X-User-Id` header when `NODE_ENV !== 'production'`
+- Falls back to `DEMO_USER_ID` if absent
+- Attaches `req.currentUserId` for all routes
+- Refuses to honor the header in production
+
+### Frontend
+- `api.ts`: all requests attach `X-User-Id: config.dev.currentUserId`
+- `postInteraction` now returns `{ success, is_match, match_id }`
+- `MatchModal.tsx`: celebratory overlay with "Keep Swiping" button
+- `SwipeScreen` shows modal when `is_match` comes back true
+
+---
+
+## Developer Tools
+
+Dev-only utilities live behind explicit flags in `config.debug`. The invariant is: **every flag in `config.debug` must be `false` (or the flag must be absent) in production.** Backend flags are env-var gated so production builds default to off without a code change. Frontend flags are toggled per-developer via `frontend/src/config.ts`.
+
+```typescript
+// backend/src/config.ts
+config.debug = {
+  ENABLE_CLEAR_ALL_BUTTON: process.env.NODE_ENV !== 'production',
+  SHOW_OWNER_DEBUG: process.env.SHOW_OWNER_DEBUG === 'true',
+};
+
+// frontend/src/config.ts
+config.debug = {
+  ENABLE_CLEAR_ALL_BUTTON: true,
+  SHOW_OWNER_DEBUG: true,
+};
+config.dev = { currentUserId: DEMO_USER_ID }; // identity bootstrap (separate concern)
+```
+
+`config.dev` is reserved for **identity / bootstrap** values that aren't binary toggles (e.g. the dev-only `currentUserId`). `config.debug` is reserved for **on/off visibility flags**.
+
+### Owner Display Debug Mode (`SHOW_OWNER_DEBUG`)
+
+#### User Story (developer only)
+While verifying feed/match logic manually, the developer wants to see the item owner's display name (`Tom`, `Omer`, `Ido`, …) rendered directly on each card so they can confirm filtering and matching are correct without inspecting DB rows.
+
+#### Database (`008_owner_debug.dev.sql` — dev only)
+- `user_profiles(user_id UUID PK, display_name TEXT)` — separate from `auth.users`; populated via plain inserts so the SQL Editor + anon key suffices.
+- Seeds three synthetic developer profiles: `11111111-… → Tom`, `22222222-… → Omer`, `33333333-… → Ido`. (Existing F4 seed users `aaaa…/bbbb…` are also profiled as `Yossi`/`Dani` for parity.)
+- Each new dev profile gets one item + one `user_locations` row (Tel Aviv area) so the items appear in the feed for the swiper at `DEMO_USER_ID`.
+- `get_feed_debug` RPC: identical to `get_feed` plus `LEFT JOIN user_profiles up ON up.user_id = i.user_id` returning an extra `owner_display_name TEXT` column. Production `get_feed` is intentionally untouched (SRP).
+
+#### Backend (`routes/feed.ts`)
+- When `config.debug.SHOW_OWNER_DEBUG` is on → calls `get_feed_debug`. On RPC error (e.g. migration not yet applied) the route logs a single `WARN` and falls back to `get_feed`, so the user-facing response is never broken.
+- When the flag is off → calls `get_feed` directly. Production response never carries `owner_display_name` (privacy invariant).
+
+#### Frontend
+- `Item.owner_display_name?: string | null` added to `types.ts`.
+- `ItemCard` renders a small badge (top-left, semi-transparent) iff `config.debug.SHOW_OWNER_DEBUG && item.owner_display_name`. If either is falsy, no DOM is emitted.
+
+#### Code Quality Compliance
+
+| Rule | How this dev tool follows it |
+|------|------------------------------|
+| **SRP** | Production `get_feed` untouched; debug variant is a separate RPC. `user_profiles` is a separate table from `auth.users` and `items`. Frontend badge is a single conditional in `ItemCard` with no spillover into `useFeed`. |
+| **Feature flags** | Backend reads from env-var (`SHOW_OWNER_DEBUG=true`) — defaults to `false` in CI/prod without code edits. Frontend is dev-only by construction (Expo dev mode); flag lives in the same `config.debug` namespace as `ENABLE_CLEAR_ALL_BUTTON`. |
+| **Graceful degradation** | If migration 008 isn't applied, route falls back to `get_feed` and logs `'get_feed_debug unavailable, falling back to get_feed'` once per request. No 500s. |
+| **Privacy** | `get_feed` never joins `user_profiles`. Production responses cannot leak owner names even if the frontend flag is flipped. |
+
+---
+
 ## Testing Strategy
 
 | ID | File | Test | Type |
@@ -266,3 +390,11 @@ Filters via `ST_DWithin(ul.location, point, radius_km * 1000)` and JOINs `user_l
 | F3-T6 | users-location-get.test.ts | GET returns 404 when no row stored | Integration |
 | F3-T7 | users-location-get.test.ts | GET returns 200 with parsed coords after upsert | Integration |
 | F3-T8 | postgisPoint.test.ts | Parser accepts valid POINT, rejects malformed/garbage | Unit |
+| F4-T1 | matches.test.ts | Mutual likes → is_match: true, match row created | Integration |
+| F4-T2 | matches.test.ts | Like + dislike → no match | Integration |
+| F4-T3 | matches.test.ts | Canonical ordering (user_one_id < user_two_id) | Integration |
+| F4-T4 | matches.test.ts | Duplicate interaction → 409, no extra match row | Integration |
+| F4-T5 | matches.test.ts | GET /v1/matches returns matches for both users | Integration |
+| F4-T6 | currentUser.test.ts | Honors X-User-Id in dev, ignores in prod, falls back to DEMO | Unit |
+| OD-T1 | feed-owner-debug.test.ts | Default (flag off) → response items have no `owner_display_name` field | Integration |
+| OD-T2 | feed-owner-debug.test.ts | `get_feed_debug` RPC returns owner_display_name when migration 008 is applied (skips when not) | Integration |

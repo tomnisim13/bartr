@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { supabase } from '../supabase';
 import { ItemStatus } from '../config';
 import { logger } from '../logger';
-import { DEMO_USER_ID } from '../constants';
 
 export const itemsRouter = Router();
 
@@ -12,7 +11,7 @@ itemsRouter.post('/items', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('items')
-      .insert({ name, user_id: DEMO_USER_ID, points_value: 0, status: ItemStatus.AVAILABLE })
+      .insert({ name, user_id: req.currentUserId, points_value: 0, status: ItemStatus.AVAILABLE })
       .select();
 
     if (error) {

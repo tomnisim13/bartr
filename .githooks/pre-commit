@@ -13,4 +13,11 @@ if [ "$OTHER_FILES" -gt 0 ] && [ "$CONTEXT_UPDATED" -eq 0 ]; then
   echo ""
 fi
 
+# Background ping to Supabase to keep the free-tier project from auto-pausing.
+# Non-blocking: detached, output silenced, errors swallowed so commits never fail on this.
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+if [ -f "$REPO_ROOT/backend/package.json" ]; then
+  (cd "$REPO_ROOT/backend" && npm run --silent db:pulse >/dev/null 2>&1 &) >/dev/null 2>&1
+fi
+
 exit 0

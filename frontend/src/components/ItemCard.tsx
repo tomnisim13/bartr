@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { Item } from '../types';
 import { ItemImage } from './ItemImage';
+import { config } from '../config';
 
 const { width, height } = Dimensions.get('window');
 
@@ -11,9 +12,16 @@ interface Props {
 }
 
 export function ItemCard({ item, onInfoPress }: Props) {
+  const showOwnerBadge = config.debug.SHOW_OWNER_DEBUG && item.owner_display_name != null;
+
   return (
     <View style={styles.card}>
       <ItemImage imageUrl={item.image_url} style={styles.image} />
+      {showOwnerBadge && (
+        <View style={styles.ownerBadge}>
+          <Text style={styles.ownerBadgeText}>Owner: {item.owner_display_name}</Text>
+        </View>
+      )}
       <View style={styles.infoContainer}>
         <View style={styles.textRow}>
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
@@ -80,6 +88,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#888',
+  },
+  ownerBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  ownerBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   infoButton: {
     width: 36,

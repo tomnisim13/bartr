@@ -1,14 +1,13 @@
 import { Router } from 'express';
 import { supabase } from '../supabase';
 import { logger } from '../logger';
-import { DEMO_USER_ID } from '../constants';
 import { parseLatLng } from '../validation/location';
 import { parsePostgisPoint } from '../validation/postgisPoint';
 
 export const usersRouter = Router();
 
-usersRouter.get('/v1/users/location', async (_req, res) => {
-  const userId = DEMO_USER_ID;
+usersRouter.get('/v1/users/location', async (req, res) => {
+  const userId = req.currentUserId;
 
   try {
     const { data, error } = await supabase
@@ -45,7 +44,7 @@ usersRouter.get('/v1/users/location', async (_req, res) => {
 });
 
 usersRouter.post('/v1/users/location', async (req, res) => {
-  const userId = DEMO_USER_ID;
+  const userId = req.currentUserId;
   const parsed = parseLatLng(req.body);
 
   if (!parsed) {
