@@ -1,6 +1,6 @@
 import { config, InteractionType } from './config';
 import { logger } from './logger';
-import { Item } from './types';
+import { Item, Match } from './types';
 
 export interface InteractionResult {
   success: boolean;
@@ -69,7 +69,7 @@ export async function clearAllInteractions(): Promise<void> {
   if (!response.ok) throw new Error('Failed to clear data');
 }
 
-export async function fetchMatches(): Promise<any[]> {
+export async function fetchMatches(): Promise<Match[]> {
   const response = await fetch(`${config.apiUrl}/v1/matches`, {
     headers: { 'X-User-Id': config.dev.currentUserId },
   });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import { ItemCard } from '../components/ItemCard';
 import { DetailModal } from '../components/DetailModal';
@@ -11,6 +11,7 @@ import { useLocation } from '../hooks/useLocation';
 import { useFeed } from '../hooks/useFeed';
 import { useClearAll } from '../hooks/useClearAll';
 import { InteractionType, config } from '../config';
+import { logger } from '../logger';
 import { Item } from '../types';
 
 export function SwipeScreen() {
@@ -31,6 +32,13 @@ export function SwipeScreen() {
   const onInfoPress = (item: Item) => {
     setSelectedItem(item);
     setModalVisible(true);
+  };
+
+  const onSendMessage = () => {
+    // Placeholder routing: messaging screen lands in Feature 5.
+    logger.info({ matchId: lastMatch?.match_id }, 'Match modal: send message tapped');
+    Alert.alert('Coming soon', 'Messaging will be available in the next release.');
+    clearLastMatch();
   };
 
   if (status === 'denied') return <LocationDeniedScreen />;
@@ -95,6 +103,7 @@ export function SwipeScreen() {
       <MatchModal
         visible={!!lastMatch?.is_match}
         onClose={clearLastMatch}
+        onSendMessage={onSendMessage}
       />
     </View>
   );

@@ -126,4 +126,59 @@ describe('Feature 4: Match Engine', () => {
     expect(rB.status).toBe(200);
     expect(rB.body.length).toBe(0);
   });
+
+  it('F4-T6: archived swiper-side item does NOT trigger a match', async () => {
+    // Two fresh users + items so we don't collide with prior tests in this file.
+    const USER_C = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    const USER_D = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
+    const { data: dC } = await supabase
+      .from('items')
+      .insert({ user_id: USER_C, name: 'C-item', points_value: 5, status: ItemStatus.AVAILABLE })
+      .select('id')
+      .single();
+    const { data: dD } = await supabase
+      .from('items')
+      .insert({ user_id: USER_D, name: 'D-item', points_value: 5, status: ItemStatus.AVAILABLE })
+      .select('id')
+      .single();
+    const itemC = dC!.id;
+    const itemD = dD!.id;
+
+    try {
+      // C likes D's item (no match yet — D hasn't liked anything from C).
+      const r1 = await request(app)
+        .post('/v1/interactions')
+        .set('X-User-Id', USER_C)
+        .send({ item_id: itemD, type: InteractionType.LIKE });
+      expect(r1.status).toBe(201);
+      expect(r1.body.is_match).toBe(false);
+
+      // C archives the item D would need to mutually like; the gate must reject.
+      await supabase.from('items').update({ status: ItemStatus.ARCHIVED }).eq('id', itemC);
+
+      // D likes C's (now-archived) item. Mutual signal exists in interactions table,
+      // but the available-item gate must suppress the match.
+      const r2 = await request(app)
+        .post('/v1/interactions')
+        .set('X-User-Id', USER_D)
+        .send({ item_id: itemC, type: InteractionType.LIKE });
+      expect(r2.status).toBe(201);
+      expect(r2.body.is_match).toBe(false);
+
+      // Verify no match row exists between C and D.
+      const userOne = USER_C < USER_D ? USER_C : USER_D;
+      const userTwo = USER_C < USER_D ? USER_D : USER_C;
+      const { data: matches } = await supabase
+        .from('matches')
+        .select('id')
+        .eq('user_one_id', userOne)
+        .eq('user_two_id', userTwo);
+      expect(matches!.length).toBe(0);
+    } finally {
+      await supabase.from('matches').delete().or(`user_one_id.eq.${USER_C},user_one_id.eq.${USER_D}`);
+      await supabase.from('interactions').delete().or(`user_id.eq.${USER_C},user_id.eq.${USER_D}`);
+      await supabase.from('items').delete().in('id', [itemC, itemD]);
+    }
+  });
 });

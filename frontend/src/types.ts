@@ -10,3 +10,10 @@ export interface Item {
   created_at: string;
   distance_km?: number;
 }
+
+export interface Match {
+  id: number;
+  user_one_id: string;
+  user_two_id: string;
+  created_at: string;
+}

@@ -9,7 +9,7 @@ VALUES (
   'Acoustic Guitar',
   'Yamaha F310, great condition, minor scratches on body',
   120,
-  1,
+  1, -- ItemStatus.AVAILABLE
   NULL
 ) ON CONFLICT DO NOTHING;
 
@@ -27,7 +27,7 @@ VALUES (
   'Leather Jacket',
   'Size M, black, barely worn',
   90,
-  1,
+  1, -- ItemStatus.AVAILABLE
   NULL
 ) ON CONFLICT DO NOTHING;
 

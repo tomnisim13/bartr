@@ -16,7 +16,9 @@ export function currentUser(req: Request, _res: Response, next: NextFunction) {
 
   if (header && !isProduction) {
     req.currentUserId = header;
-    logger.info({ userId: header }, 'Dev identity override via X-User-Id');
+    // Debug-only: fires on every request when the frontend ships X-User-Id, so
+    // we keep it off the default (info) channel to avoid log volume bombs.
+    logger.debug({ userId: header }, 'Dev identity override via X-User-Id');
   } else {
     req.currentUserId = DEMO_USER_ID;
   }
