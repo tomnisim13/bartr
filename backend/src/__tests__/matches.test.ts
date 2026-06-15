@@ -12,6 +12,10 @@ let itemFromB: number;
 let itemFromDemo: number;
 
 beforeAll(async () => {
+  // Clean up any leftover state from prior failed runs
+  await supabase.from('matches').delete().or(`user_one_id.eq.${USER_A},user_one_id.eq.${USER_B},user_one_id.eq.${DEMO_USER_ID}`);
+  await supabase.from('interactions').delete().or(`user_id.eq.${USER_A},user_id.eq.${USER_B},user_id.eq.${DEMO_USER_ID}`);
+
   // Seed items for each user
   const { data: dA } = await supabase
     .from('items')
