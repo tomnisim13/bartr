@@ -136,7 +136,7 @@ Returns paginated items excluding own items and already-interacted items.
 - Info modal on "i" tap
 - Pre-fetch next batch when remaining cards ≤ `config.feed.prefetchThreshold` (default 5)
 - Empty state: "Oops, looks like you've swiped on everything nearby!"
-- DEV: Clear-All button (`config.dev.enableClearAll`) calls `DELETE /v1/dev/clear` and reloads the feed
+- DEV: Clear-All button (`config.debug.ENABLE_CLEAR_ALL_BUTTON`) calls `DELETE /v1/dev/clear` and reloads the feed
 - All catch blocks log via the structured `logger` (no silent failures)
 
 ### Edge Cases
@@ -255,10 +255,8 @@ Filters via `ST_DWithin(ul.location, point, radius_km * 1000)` and JOINs `user_l
 
 ```typescript
 // frontend/src/config.ts
-config.dev = {
-  enableClearAll: true,
-  currentUserId: DEMO_USER_ID,  // swap to test as another user
-};
+config.dev = { currentUserId: DEMO_USER_ID }; // swap to test as another user
+config.debug = { ENABLE_CLEAR_ALL_BUTTON: true, SHOW_OWNER_DEBUG: true };
 ```
 
 ### Database Schema (005_matches.sql)
@@ -398,6 +396,5 @@ While verifying feed/match logic manually, the developer wants to see the item o
 | F4-T4 | matches.test.ts | Duplicate interaction → 409, no extra match row | Integration |
 | F4-T5 | matches.test.ts | GET /v1/matches returns matches for both users | Integration |
 | F4-T6 | currentUser.test.ts | Honors X-User-Id in dev, ignores in prod, falls back to DEMO | Unit |
-| OD-T1 | feed-owner-debug.test.ts | Flag off → response items have no `owner_display_name` field | Integration |
-| OD-T2 | feed-owner-debug.test.ts | Flag on + migration applied → response items carry `owner_display_name` | Integration |
-| OD-T3 | feed-owner-debug.test.ts | Flag on + RPC missing → falls back to `get_feed`, logs WARN, response stays valid | Integration |
+| OD-T1 | feed-owner-debug.test.ts | Default (flag off) → response items have no `owner_display_name` field | Integration |
+| OD-T2 | feed-owner-debug.test.ts | `get_feed_debug` RPC returns owner_display_name when migration 008 is applied (skips when not) | Integration |

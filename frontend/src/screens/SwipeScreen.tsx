@@ -50,7 +50,7 @@ export function SwipeScreen() {
     return (
       <View style={styles.center}>
         <EmptyState />
-        {config.dev.enableClearAll && (
+        {config.debug.ENABLE_CLEAR_ALL_BUTTON && (
           <ClearAllButton clearing={emptyClearAll.clearing} onPress={emptyClearAll.trigger} />
         )}
       </View>
@@ -92,7 +92,7 @@ export function SwipeScreen() {
         <Text style={styles.iconLabel}>🗑️</Text>
         <Text style={styles.iconLabel}>🛒</Text>
       </View>
-      {config.dev.enableClearAll && (
+      {config.debug.ENABLE_CLEAR_ALL_BUTTON && (
         <ClearAllButton clearing={mainClearAll.clearing} onPress={mainClearAll.trigger} />
       )}
       <DetailModal
