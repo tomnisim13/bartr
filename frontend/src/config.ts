@@ -25,5 +25,6 @@ export const config = {
   // DEV: development tools config — remove before production
   dev: {
     enableClearAll: true,
+    currentUserId: '00000000-0000-0000-0000-000000000001',
   },
 };

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import { ItemCard } from '../components/ItemCard';
 import { DetailModal } from '../components/DetailModal';
+import { MatchModal } from '../components/MatchModal';
 import { EmptyState } from '../components/EmptyState';
 import { ClearAllButton } from '../components/ClearAllButton';
 import { LocationDeniedScreen } from './LocationDeniedScreen';
@@ -14,7 +15,7 @@ import { Item } from '../types';
 
 export function SwipeScreen() {
   const { status, coords } = useLocation();
-  const { cards, loading, empty, reload, recordSwipe, markEmpty } = useFeed(coords);
+  const { cards, loading, empty, lastMatch, reload, recordSwipe, markEmpty, clearLastMatch } = useFeed(coords);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [swiperKey, setSwiperKey] = useState(0);
@@ -90,6 +91,10 @@ export function SwipeScreen() {
         item={selectedItem}
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
+      />
+      <MatchModal
+        visible={!!lastMatch?.is_match}
+        onClose={clearLastMatch}
       />
     </View>
   );

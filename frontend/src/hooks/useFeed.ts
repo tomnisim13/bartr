@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import { fetchFeed, postInteraction } from '../api';
+import { fetchFeed, postInteraction, InteractionResult } from '../api';
 import { InteractionType, config } from '../config';
 import { logger } from '../logger';
 import { Item } from '../types';
@@ -14,16 +14,19 @@ interface UseFeedResult {
   cards: Item[];
   loading: boolean;
   empty: boolean;
+  lastMatch: InteractionResult | null;
   reload: () => void;
   recordSwipe: (index: number, type: InteractionType) => Promise<void>;
   markEmpty: () => void;
   resetCards: () => void;
+  clearLastMatch: () => void;
 }
 
 export function useFeed(coords: Coords | null): UseFeedResult {
   const [cards, setCards] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [empty, setEmpty] = useState(false);
+  const [lastMatch, setLastMatch] = useState<InteractionResult | null>(null);
   const cardsRef = useRef<Item[]>([]);
   const coordsRef = useRef<Coords | null>(coords);
 
@@ -59,7 +62,10 @@ export function useFeed(coords: Coords | null): UseFeedResult {
     if (!item) return;
 
     try {
-      await postInteraction(item.id, type);
+      const result = await postInteraction(item.id, type);
+      if (result.is_match) {
+        setLastMatch(result);
+      }
     } catch (err) {
       logger.error({ err: String(err), itemId: item.id, type }, 'Interaction post failed');
     }
@@ -79,6 +85,7 @@ export function useFeed(coords: Coords | null): UseFeedResult {
 
   const markEmpty = useCallback(() => setEmpty(true), []);
   const resetCards = useCallback(() => setCards([]), []);
+  const clearLastMatch = useCallback(() => setLastMatch(null), []);
 
-  return { cards, loading, empty, reload, recordSwipe, markEmpty, resetCards };
+  return { cards, loading, empty, lastMatch, reload, recordSwipe, markEmpty, resetCards, clearLastMatch };
 }

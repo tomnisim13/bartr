@@ -2,7 +2,6 @@ import { Router, Request } from 'express';
 import { supabase } from '../supabase';
 import { config } from '../config';
 import { logger } from '../logger';
-import { DEMO_USER_ID } from '../constants';
 import { parseLatLng } from '../validation/location';
 
 export const feedRouter = Router();
@@ -17,7 +16,7 @@ function parseFeedQuery(req: Request) {
 }
 
 feedRouter.get('/v1/feed', async (req, res) => {
-  const userId = DEMO_USER_ID;
+  const userId = req.currentUserId;
   const { coords, limit, offset, radius_km } = parseFeedQuery(req);
 
   if (!coords) {

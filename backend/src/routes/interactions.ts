@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../supabase';
 import { InteractionType } from '../config';
 import { logger } from '../logger';
-import { DEMO_USER_ID, POSTGRES_UNIQUE_VIOLATION } from '../constants';
+import { POSTGRES_UNIQUE_VIOLATION } from '../constants';
 
 export const interactionsRouter = Router();
 
@@ -17,7 +17,7 @@ function isValidInteractionPayload(item_id: unknown, type: unknown): boolean {
 
 interactionsRouter.post('/v1/interactions', async (req, res) => {
   const { item_id, type } = req.body;
-  const userId = DEMO_USER_ID;
+  const userId = req.currentUserId;
 
   if (!isValidInteractionPayload(item_id, type)) {
     logger.warn({ item_id, type }, 'Interaction rejected: invalid input');
@@ -26,9 +26,11 @@ interactionsRouter.post('/v1/interactions', async (req, res) => {
   }
 
   try {
-    const { error } = await supabase
-      .from('interactions')
-      .insert({ user_id: userId, item_id, type });
+    const { data, error } = await supabase.rpc('record_interaction', {
+      swiper_id: userId,
+      p_item_id: item_id,
+      interaction_type: type,
+    });
 
     if (error) {
       if (error.code === POSTGRES_UNIQUE_VIOLATION) {
@@ -36,13 +38,30 @@ interactionsRouter.post('/v1/interactions', async (req, res) => {
         res.status(409).json({ error: 'Interaction already exists' });
         return;
       }
-      logger.error({ error, userId, item_id }, 'Interaction insert failed');
+      logger.error({ error, userId, item_id }, 'Interaction RPC failed');
       res.status(500).json({ error: 'Internal Server Error' });
       return;
     }
 
-    logger.info({ userId, item_id, type }, 'Interaction recorded');
-    res.status(201).json({ success: true });
+    const result = Array.isArray(data) ? data[0] : data;
+
+    if (!result?.success) {
+      logger.warn({ userId, item_id }, 'Duplicate interaction attempted');
+      res.status(409).json({ error: 'Interaction already exists' });
+      return;
+    }
+
+    if (result.is_match) {
+      logger.info({ userId, item_id, type, match_id: result.match_id }, 'Match created');
+    } else {
+      logger.info({ userId, item_id, type }, 'Interaction recorded');
+    }
+
+    res.status(201).json({
+      success: true,
+      is_match: result.is_match,
+      match_id: result.match_id ?? undefined,
+    });
   } catch (err) {
     logger.error({ err, userId, item_id }, 'Interaction unexpected error');
     res.status(500).json({ error: 'Internal Server Error' });
