@@ -318,6 +318,57 @@ Two synthetic users with items in Tel Aviv (within radius of DEMO_USER_ID):
 
 ---
 
+## Developer Tools
+
+Dev-only utilities live behind explicit flags in `config.debug`. The invariant is: **every flag in `config.debug` must be `false` (or the flag must be absent) in production.** Backend flags are env-var gated so production builds default to off without a code change. Frontend flags are toggled per-developer via `frontend/src/config.ts`.
+
+```typescript
+// backend/src/config.ts
+config.debug = {
+  ENABLE_CLEAR_ALL_BUTTON: process.env.NODE_ENV !== 'production',
+  SHOW_OWNER_DEBUG: process.env.SHOW_OWNER_DEBUG === 'true',
+};
+
+// frontend/src/config.ts
+config.debug = {
+  ENABLE_CLEAR_ALL_BUTTON: true,
+  SHOW_OWNER_DEBUG: true,
+};
+config.dev = { currentUserId: DEMO_USER_ID }; // identity bootstrap (separate concern)
+```
+
+`config.dev` is reserved for **identity / bootstrap** values that aren't binary toggles (e.g. the dev-only `currentUserId`). `config.debug` is reserved for **on/off visibility flags**.
+
+### Owner Display Debug Mode (`SHOW_OWNER_DEBUG`)
+
+#### User Story (developer only)
+While verifying feed/match logic manually, the developer wants to see the item owner's display name (`Tom`, `Omer`, `Ido`, …) rendered directly on each card so they can confirm filtering and matching are correct without inspecting DB rows.
+
+#### Database (`008_owner_debug.dev.sql` — dev only)
+- `user_profiles(user_id UUID PK, display_name TEXT)` — separate from `auth.users`; populated via plain inserts so the SQL Editor + anon key suffices.
+- Seeds three synthetic developer profiles: `11111111-… → Tom`, `22222222-… → Omer`, `33333333-… → Ido`. (Existing F4 seed users `aaaa…/bbbb…` are also profiled as `Yossi`/`Dani` for parity.)
+- Each new dev profile gets one item + one `user_locations` row (Tel Aviv area) so the items appear in the feed for the swiper at `DEMO_USER_ID`.
+- `get_feed_debug` RPC: identical to `get_feed` plus `LEFT JOIN user_profiles up ON up.user_id = i.user_id` returning an extra `owner_display_name TEXT` column. Production `get_feed` is intentionally untouched (SRP).
+
+#### Backend (`routes/feed.ts`)
+- When `config.debug.SHOW_OWNER_DEBUG` is on → calls `get_feed_debug`. On RPC error (e.g. migration not yet applied) the route logs a single `WARN` and falls back to `get_feed`, so the user-facing response is never broken.
+- When the flag is off → calls `get_feed` directly. Production response never carries `owner_display_name` (privacy invariant).
+
+#### Frontend
+- `Item.owner_display_name?: string | null` added to `types.ts`.
+- `ItemCard` renders a small badge (top-left, semi-transparent) iff `config.debug.SHOW_OWNER_DEBUG && item.owner_display_name`. If either is falsy, no DOM is emitted.
+
+#### Code Quality Compliance
+
+| Rule | How this dev tool follows it |
+|------|------------------------------|
+| **SRP** | Production `get_feed` untouched; debug variant is a separate RPC. `user_profiles` is a separate table from `auth.users` and `items`. Frontend badge is a single conditional in `ItemCard` with no spillover into `useFeed`. |
+| **Feature flags** | Backend reads from env-var (`SHOW_OWNER_DEBUG=true`) — defaults to `false` in CI/prod without code edits. Frontend is dev-only by construction (Expo dev mode); flag lives in the same `config.debug` namespace as `ENABLE_CLEAR_ALL_BUTTON`. |
+| **Graceful degradation** | If migration 008 isn't applied, route falls back to `get_feed` and logs `'get_feed_debug unavailable, falling back to get_feed'` once per request. No 500s. |
+| **Privacy** | `get_feed` never joins `user_profiles`. Production responses cannot leak owner names even if the frontend flag is flipped. |
+
+---
+
 ## Testing Strategy
 
 | ID | File | Test | Type |
@@ -347,3 +398,6 @@ Two synthetic users with items in Tel Aviv (within radius of DEMO_USER_ID):
 | F4-T4 | matches.test.ts | Duplicate interaction → 409, no extra match row | Integration |
 | F4-T5 | matches.test.ts | GET /v1/matches returns matches for both users | Integration |
 | F4-T6 | currentUser.test.ts | Honors X-User-Id in dev, ignores in prod, falls back to DEMO | Unit |
+| OD-T1 | feed-owner-debug.test.ts | Flag off → response items have no `owner_display_name` field | Integration |
+| OD-T2 | feed-owner-debug.test.ts | Flag on + migration applied → response items carry `owner_display_name` | Integration |
+| OD-T3 | feed-owner-debug.test.ts | Flag on + RPC missing → falls back to `get_feed`, logs WARN, response stays valid | Integration |
