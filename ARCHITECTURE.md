@@ -243,6 +243,81 @@ Filters via `ST_DWithin(ul.location, point, radius_km * 1000)` and JOINs `user_l
 
 ---
 
+## Feature 4: Match Engine & Seed Data
+
+### User Stories
+- **Mutual Like = Match**: When User A likes an item from User B, and User B has already liked an item from User A, a match is created automatically.
+- **Match Celebration**: A modal overlay appears on the swiper when a match occurs ("It's a Match!").
+- **Match List**: Users can view their matches via `GET /v1/matches`.
+- **Multi-user Dev Testing**: An `X-User-Id` header (dev only) allows swapping identity without auth, enabling manual two-user match testing.
+
+### Config
+
+```typescript
+// frontend/src/config.ts
+config.dev = {
+  enableClearAll: true,
+  currentUserId: DEMO_USER_ID,  // swap to test as another user
+};
+```
+
+### Database Schema (005_matches.sql)
+
+```sql
+CREATE TABLE matches (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_one_id UUID NOT NULL,
+  user_two_id UUID NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+  CONSTRAINT matches_canonical_pair CHECK (user_one_id < user_two_id),
+  CONSTRAINT matches_unique_pair UNIQUE (user_one_id, user_two_id)
+);
+CREATE INDEX idx_matches_user_search ON matches (user_one_id, user_two_id);
+```
+
+Canonical ordering (`user_one_id < user_two_id`) prevents duplicate match rows regardless of who swipes second.
+
+### `record_interaction` RPC
+
+```sql
+CREATE FUNCTION record_interaction(
+  swiper_id UUID, item_id BIGINT, interaction_type SMALLINT
+) RETURNS TABLE (success BOOLEAN, is_match BOOLEAN, match_id BIGINT)
+```
+
+Single transaction: inserts interaction → if LIKE, checks for mutual like → if mutual, inserts match row. Returns `success=false` on duplicate (23505). Returns `is_match=true` + `match_id` when a match is created.
+
+### Seed Data (006_seed_match_users.dev.sql)
+
+Two synthetic users with items in Tel Aviv (within radius of DEMO_USER_ID):
+- `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa` — "Yossi Acoustic Guitar"
+- `bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb` — "Dani Leather Jacket"
+
+### API Endpoints
+
+#### POST /v1/interactions (updated)
+- Now calls `record_interaction` RPC instead of direct insert
+- Response: `{ success: true, is_match: boolean, match_id?: number }`
+- Logs: `Interaction recorded` / `Match created` / `Duplicate interaction attempted`
+
+#### GET /v1/matches (new)
+- Returns current user's matches ordered by `created_at DESC`
+- Response: array of match objects
+
+### X-User-Id Middleware (dev only)
+- Reads `X-User-Id` header when `NODE_ENV !== 'production'`
+- Falls back to `DEMO_USER_ID` if absent
+- Attaches `req.currentUserId` for all routes
+- Refuses to honor the header in production
+
+### Frontend
+- `api.ts`: all requests attach `X-User-Id: config.dev.currentUserId`
+- `postInteraction` now returns `{ success, is_match, match_id }`
+- `MatchModal.tsx`: celebratory overlay with "Keep Swiping" button
+- `SwipeScreen` shows modal when `is_match` comes back true
+
+---
+
 ## Testing Strategy
 
 | ID | File | Test | Type |
@@ -266,3 +341,9 @@ Filters via `ST_DWithin(ul.location, point, radius_km * 1000)` and JOINs `user_l
 | F3-T6 | users-location-get.test.ts | GET returns 404 when no row stored | Integration |
 | F3-T7 | users-location-get.test.ts | GET returns 200 with parsed coords after upsert | Integration |
 | F3-T8 | postgisPoint.test.ts | Parser accepts valid POINT, rejects malformed/garbage | Unit |
+| F4-T1 | matches.test.ts | Mutual likes → is_match: true, match row created | Integration |
+| F4-T2 | matches.test.ts | Like + dislike → no match | Integration |
+| F4-T3 | matches.test.ts | Canonical ordering (user_one_id < user_two_id) | Integration |
+| F4-T4 | matches.test.ts | Duplicate interaction → 409, no extra match row | Integration |
+| F4-T5 | matches.test.ts | GET /v1/matches returns matches for both users | Integration |
+| F4-T6 | currentUser.test.ts | Honors X-User-Id in dev, ignores in prod, falls back to DEMO | Unit |
