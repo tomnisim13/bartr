@@ -19,3 +19,21 @@ export interface Match {
   user_two_id: string;
   created_at: string;
 }
+
+export interface UserProfile {
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  balance_points: number;
+}
+
+export interface WalletTransaction {
+  id: number;
+  wallet_id: number;
+  type: number;
+  amount: number;
+  balance_after: number;
+  reference_id: string | null;
+  description: string | null;
+  created_at: string;
+}

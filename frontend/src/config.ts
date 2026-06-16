@@ -1,3 +1,5 @@
+import Constants from 'expo-constants';
+
 export enum ItemStatus {
   AVAILABLE = 1,
   TRADED = 2,
@@ -11,8 +13,23 @@ export enum InteractionType {
 
 export const SRID_WGS84 = 4326;
 
+const API_PORT = 3000;
+
+// Derive the LAN IP of the Mac running Metro so physical devices reach the
+// backend without manual edits. Falls back to localhost on simulators where
+// hostUri is unavailable.
+function resolveDevApiUrl(): string {
+  const hostUri =
+    (Constants.expoConfig as { hostUri?: string } | null)?.hostUri ??
+    (Constants as unknown as { manifest2?: { extra?: { expoGo?: { debuggerHost?: string } } } })
+      .manifest2?.extra?.expoGo?.debuggerHost ??
+    (Constants as unknown as { manifest?: { debuggerHost?: string } }).manifest?.debuggerHost;
+  const host = hostUri?.split(':')[0];
+  return host ? `http://${host}:${API_PORT}` : `http://localhost:${API_PORT}`;
+}
+
 export const config = {
-  apiUrl: 'http://localhost:3000',
+  apiUrl: __DEV__ ? resolveDevApiUrl() : 'https://api.bartr.example',
   feed: {
     limit: 20,
     prefetchThreshold: 5,
@@ -29,6 +46,7 @@ export const config = {
   // Debug visibility flags. INVARIANT: every flag here must be false in production.
   debug: {
     ENABLE_CLEAR_ALL_BUTTON: true,
+    ENABLE_SWITCH_USER: true,
     SHOW_OWNER_DEBUG: true,
   },
 };

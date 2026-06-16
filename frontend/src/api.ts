@@ -1,6 +1,6 @@
 import { config, InteractionType } from './config';
 import { logger } from './logger';
-import { Item, Match } from './types';
+import { Item, Match, UserProfile, WalletTransaction } from './types';
 
 export interface InteractionResult {
   success: boolean;
@@ -74,5 +74,42 @@ export async function fetchMatches(): Promise<Match[]> {
     headers: { 'X-User-Id': config.dev.currentUserId },
   });
   if (!response.ok) throw new Error('Failed to fetch matches');
+  return response.json();
+}
+
+export interface DevUser {
+  id: string;
+  display_name: string;
+}
+
+export async function fetchDevUsers(): Promise<DevUser[]> {
+  const response = await fetch(`${config.apiUrl}/v1/dev/users`, {
+    headers: { 'X-User-Id': config.dev.currentUserId },
+  });
+  if (!response.ok) throw new Error('Failed to fetch dev users');
+  return response.json();
+}
+
+export async function fetchProfile(): Promise<UserProfile> {
+  const response = await fetch(`${config.apiUrl}/v1/users/profile`, {
+    headers: { 'X-User-Id': config.dev.currentUserId },
+  });
+  if (!response.ok) throw new Error('Failed to fetch profile');
+  return response.json();
+}
+
+export async function fetchWallet(): Promise<{ id: number; balance_points: number }> {
+  const response = await fetch(`${config.apiUrl}/v1/wallet`, {
+    headers: { 'X-User-Id': config.dev.currentUserId },
+  });
+  if (!response.ok) throw new Error('Failed to fetch wallet');
+  return response.json();
+}
+
+export async function fetchTransactions(limit = 50, offset = 0): Promise<WalletTransaction[]> {
+  const response = await fetch(`${config.apiUrl}/v1/wallet/transactions?limit=${limit}&offset=${offset}`, {
+    headers: { 'X-User-Id': config.dev.currentUserId },
+  });
+  if (!response.ok) throw new Error('Failed to fetch transactions');
   return response.json();
 }

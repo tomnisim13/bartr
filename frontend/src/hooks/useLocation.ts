@@ -24,7 +24,15 @@ async function isPermissionGranted(): Promise<boolean> {
 
 async function fetchInitialCoords(): Promise<Coords | null> {
   try {
-    const position = await Location.getCurrentPositionAsync({});
+    const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 3000));
+    const position = await Promise.race([
+      Location.getCurrentPositionAsync({}),
+      timeout,
+    ]);
+    if (!position) {
+      logger.warn({}, 'getCurrentPositionAsync timed out');
+      return null;
+    }
     return { lat: position.coords.latitude, lng: position.coords.longitude };
   } catch (err) {
     logger.warn({ err: String(err) }, 'getCurrentPositionAsync failed');
@@ -86,10 +94,11 @@ export function useLocation(): UseLocationResult {
     if (!mountedRef.current) return;
 
     if (!granted) {
-      const fallback = await fetchLastStoredCoords();
+      const DEV_FALLBACK: Coords = { lat: 32.08, lng: 34.78 };
+      const fallback = (await fetchLastStoredCoords()) ?? (__DEV__ ? DEV_FALLBACK : null);
       if (!mountedRef.current) return;
       if (fallback) {
-        logger.info({ lat: fallback.lat, lng: fallback.lng }, 'Using last stored location (permission denied)');
+        logger.info({ lat: fallback.lat, lng: fallback.lng }, 'Using fallback location');
         setCoords(fallback);
         setStatus('fallback');
       } else {
@@ -99,7 +108,8 @@ export function useLocation(): UseLocationResult {
       return;
     }
 
-    const initial = (await fetchInitialCoords()) ?? (await fetchLastStoredCoords());
+    const DEV_FALLBACK: Coords = { lat: 32.08, lng: 34.78 }; // Tel Aviv
+    const initial = __DEV__ ? DEV_FALLBACK : ((await fetchInitialCoords()) ?? (await fetchLastStoredCoords()));
     if (!mountedRef.current) return;
 
     if (!initial) {
@@ -111,7 +121,7 @@ export function useLocation(): UseLocationResult {
     setCoords(initial);
     setStatus('granted');
     await postCoordsSafely(initial, 'Initial location posted');
-    await subscribeToMovement();
+    if (!__DEV__) await subscribeToMovement();
   }
 
   async function subscribeToMovement(): Promise<void> {

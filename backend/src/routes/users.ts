@@ -6,6 +6,34 @@ import { parsePostgisPoint } from '../validation/postgisPoint';
 
 export const usersRouter = Router();
 
+usersRouter.get('/v1/users/profile', async (req, res) => {
+  const userId = req.currentUserId;
+
+  try {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('id, display_name, avatar_url')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const { data: wallet } = await supabase
+      .from('wallets')
+      .select('balance_points')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    res.json({
+      user_id: userId,
+      display_name: profile?.display_name || 'Anonymous',
+      avatar_url: profile?.avatar_url || null,
+      balance_points: wallet?.balance_points ?? 0,
+    });
+  } catch (err) {
+    logger.error({ err, userId }, 'Profile unexpected error');
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 usersRouter.get('/v1/users/location', async (req, res) => {
   const userId = req.currentUserId;
 
