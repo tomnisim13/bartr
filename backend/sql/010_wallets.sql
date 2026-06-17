@@ -47,7 +47,7 @@ DECLARE
 BEGIN
   -- Get or create wallet
   INSERT INTO wallets (user_id, balance_points)
-  VALUES (p_user_id, starting_balance_points())
+  VALUES (p_user_id, 0)
   ON CONFLICT (user_id) DO NOTHING;
 
   -- Atomic update
@@ -80,7 +80,7 @@ DECLARE
 BEGIN
   -- Get or create wallet
   INSERT INTO wallets (user_id, balance_points)
-  VALUES (p_user_id, starting_balance_points())
+  VALUES (p_user_id, 0)
   ON CONFLICT (user_id) DO NOTHING;
 
   -- Atomic update with balance check
