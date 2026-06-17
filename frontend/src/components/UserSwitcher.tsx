@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { fetchDevUsers, DevUser } from '../api';
 import { getDevUserId, setDevUserId } from '../devIdentity';
+import { logger } from '../logger';
 
 interface Props {
   visible: boolean;
@@ -12,13 +13,19 @@ interface Props {
 export function UserSwitcher({ visible, onClose, onSwitched }: Props) {
   const [users, setUsers] = useState<DevUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     setLoading(true);
+    setLoadFailed(false);
     fetchDevUsers()
       .then(setUsers)
-      .catch(() => setUsers([]))
+      .catch(err => {
+        logger.error({ err: String(err) }, 'UserSwitcher: fetchDevUsers failed');
+        setUsers([]);
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, [visible]);
 
@@ -37,6 +44,10 @@ export function UserSwitcher({ visible, onClose, onSwitched }: Props) {
           <Text style={styles.title}>Switch User</Text>
           {loading ? (
             <ActivityIndicator size="small" color="#6c47ff" />
+          ) : loadFailed ? (
+            <Text style={styles.errorText}>Couldn't load users. Check your connection.</Text>
+          ) : users.length === 0 ? (
+            <Text style={styles.errorText}>No dev users found.</Text>
           ) : (
             <FlatList
               data={users}
@@ -70,4 +81,5 @@ const styles = StyleSheet.create({
   uid: { fontSize: 12, color: '#999' },
   closeBtn: { marginTop: 16, alignItems: 'center', paddingVertical: 12 },
   closeBtnText: { color: '#6c47ff', fontSize: 16, fontWeight: '600' },
+  errorText: { color: '#999', fontSize: 14, textAlign: 'center', paddingVertical: 24 },
 });

@@ -1,4 +1,4 @@
-import { ItemStatus } from './config';
+import { ItemStatus, TransactionType } from './config';
 
 export interface Item {
   id: number;
@@ -30,7 +30,7 @@ export interface UserProfile {
 export interface WalletTransaction {
   id: number;
   wallet_id: number;
-  type: number;
+  type: TransactionType;
   amount: number;
   balance_after: number;
   reference_id: string | null;

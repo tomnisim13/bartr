@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity } from 'react-native';
 import { fetchProfile, fetchTransactions } from '../api';
+import { TransactionType } from '../config';
+import { logger } from '../logger';
 import { UserProfile, WalletTransaction } from '../types';
 
-const TX_TYPE_LABELS: Record<number, string> = {
-  1: 'Signup Bonus',
-  2: 'Match Bonus',
-  3: 'Trade Debit',
-  4: 'Trade Credit',
-  99: 'Adjustment',
+const TX_TYPE_LABELS: Record<TransactionType, string> = {
+  [TransactionType.SIGNUP_BONUS]: 'Signup Bonus',
+  [TransactionType.MATCH_BONUS]: 'Match Bonus',
+  [TransactionType.ITEM_TRADE_DEBIT]: 'Trade Debit',
+  [TransactionType.ITEM_TRADE_CREDIT]: 'Trade Credit',
+  [TransactionType.MANUAL_ADJUSTMENT]: 'Adjustment',
 };
 
 interface Props {
@@ -19,14 +21,17 @@ export function ProfileScreen({ onBack }: Props) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const load = useCallback(async () => {
+    setLoadFailed(false);
     try {
       const [p, txs] = await Promise.all([fetchProfile(), fetchTransactions()]);
       setProfile(p);
       setTransactions(txs);
-    } catch {
-      // silent
+    } catch (err) {
+      logger.error({ err: String(err) }, 'ProfileScreen load failed');
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -61,7 +66,9 @@ export function ProfileScreen({ onBack }: Props) {
 
       <Text style={styles.sectionTitle}>Transaction History</Text>
 
-      {transactions.length === 0 ? (
+      {loadFailed ? (
+        <Text style={styles.emptyText}>Couldn't load profile. Pull to retry.</Text>
+      ) : transactions.length === 0 ? (
         <Text style={styles.emptyText}>No transactions yet</Text>
       ) : (
         <FlatList

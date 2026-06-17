@@ -1,14 +1,17 @@
 import { config } from './config';
 
-let currentUserId = config.dev.currentUserId;
+// Single source of truth for the dev-mode identity is config.dev.currentUserId.
+// All API calls read this value at request time, so mutating it propagates
+// automatically without a separate cache.
+
 const listeners: Array<(id: string) => void> = [];
 
 export function getDevUserId(): string {
-  return currentUserId;
+  return config.dev.currentUserId;
 }
 
 export function setDevUserId(id: string): void {
-  currentUserId = id;
+  if (config.dev.currentUserId === id) return;
   config.dev.currentUserId = id;
   listeners.forEach(fn => fn(id));
 }

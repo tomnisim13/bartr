@@ -12,6 +12,9 @@ interface Coords {
   lng: number;
 }
 
+// Tel Aviv — used in dev when the simulator/device GPS is unreliable.
+const DEV_FALLBACK_COORDS: Coords = { lat: 32.08, lng: 34.78 };
+
 interface UseLocationResult {
   status: LocationStatus;
   coords: Coords | null;
@@ -94,8 +97,7 @@ export function useLocation(): UseLocationResult {
     if (!mountedRef.current) return;
 
     if (!granted) {
-      const DEV_FALLBACK: Coords = { lat: 32.08, lng: 34.78 };
-      const fallback = (await fetchLastStoredCoords()) ?? (__DEV__ ? DEV_FALLBACK : null);
+      const fallback = (await fetchLastStoredCoords()) ?? (__DEV__ ? DEV_FALLBACK_COORDS : null);
       if (!mountedRef.current) return;
       if (fallback) {
         logger.info({ lat: fallback.lat, lng: fallback.lng }, 'Using fallback location');
@@ -108,8 +110,7 @@ export function useLocation(): UseLocationResult {
       return;
     }
 
-    const DEV_FALLBACK: Coords = { lat: 32.08, lng: 34.78 }; // Tel Aviv
-    const initial = __DEV__ ? DEV_FALLBACK : ((await fetchInitialCoords()) ?? (await fetchLastStoredCoords()));
+    const initial = __DEV__ ? DEV_FALLBACK_COORDS : ((await fetchInitialCoords()) ?? (await fetchLastStoredCoords()));
     if (!mountedRef.current) return;
 
     if (!initial) {

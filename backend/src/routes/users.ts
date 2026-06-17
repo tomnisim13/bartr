@@ -3,33 +3,17 @@ import { supabase } from '../supabase';
 import { logger } from '../logger';
 import { parseLatLng } from '../validation/location';
 import { parsePostgisPoint } from '../validation/postgisPoint';
+import { getProfile } from '../services/profileService';
 
 export const usersRouter = Router();
 
 usersRouter.get('/v1/users/profile', async (req, res) => {
   const userId = req.currentUserId;
-
   try {
-    const { data: profile } = await supabase
-      .from('users')
-      .select('id, display_name, avatar_url')
-      .eq('id', userId)
-      .maybeSingle();
-
-    const { data: wallet } = await supabase
-      .from('wallets')
-      .select('balance_points')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    res.json({
-      user_id: userId,
-      display_name: profile?.display_name || 'Anonymous',
-      avatar_url: profile?.avatar_url || null,
-      balance_points: wallet?.balance_points ?? 0,
-    });
+    const profile = await getProfile(userId);
+    res.json(profile);
   } catch (err) {
-    logger.error({ err, userId }, 'Profile unexpected error');
+    logger.error({ err: String(err), userId }, 'Profile endpoint failed');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

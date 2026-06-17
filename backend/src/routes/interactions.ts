@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../supabase';
 import { InteractionType } from '../config';
 import { logger } from '../logger';
+import { timed } from '../utils/timed';
 
 export const interactionsRouter = Router();
 
@@ -39,11 +40,16 @@ interactionsRouter.post('/v1/interactions', async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.rpc('record_interaction', {
-      swiper_id: userId,
-      p_item_id: item_id,
-      interaction_type: type,
-    });
+    const { data, error } = await timed(
+      'rpc.record_interaction',
+      { userId, item_id, type },
+      () =>
+        supabase.rpc('record_interaction', {
+          swiper_id: userId,
+          p_item_id: item_id,
+          interaction_type: type,
+        }),
+    );
 
     if (error) {
       logger.error({ error, userId, item_id }, 'Interaction RPC failed');

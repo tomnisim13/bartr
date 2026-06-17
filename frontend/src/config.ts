@@ -11,6 +11,16 @@ export enum InteractionType {
   LIKE = 1,
 }
 
+// Mirrors backend/src/config.ts -> enum TransactionType.
+// Keep numeric values aligned with the SQL CHECK constraint in 013_wallet_type_check.sql.
+export enum TransactionType {
+  SIGNUP_BONUS = 1,
+  MATCH_BONUS = 2,
+  ITEM_TRADE_DEBIT = 3,
+  ITEM_TRADE_CREDIT = 4,
+  MANUAL_ADJUSTMENT = 99,
+}
+
 export const SRID_WGS84 = 4326;
 
 const API_PORT = 3000;
