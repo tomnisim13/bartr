@@ -3,8 +3,20 @@ import { supabase } from '../supabase';
 import { logger } from '../logger';
 import { parseLatLng } from '../validation/location';
 import { parsePostgisPoint } from '../validation/postgisPoint';
+import { getProfile } from '../services/profileService';
 
 export const usersRouter = Router();
+
+usersRouter.get('/v1/users/profile', async (req, res) => {
+  const userId = req.currentUserId;
+  try {
+    const profile = await getProfile(userId);
+    res.json(profile);
+  } catch (err) {
+    logger.error({ err: String(err), userId }, 'Profile endpoint failed');
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 usersRouter.get('/v1/users/location', async (req, res) => {
   const userId = req.currentUserId;

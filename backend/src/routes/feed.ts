@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { config } from '../config';
 import { logger } from '../logger';
 import { parseLatLng } from '../validation/location';
+import { timed } from '../utils/timed';
 
 export const feedRouter = Router();
 
@@ -58,12 +59,14 @@ feedRouter.get('/v1/feed', async (req, res) => {
 // Falls back gracefully if the debug RPC isn't deployed (e.g. migration 008 not applied).
 async function runFeedQuery(params: Record<string, unknown>) {
   if (!config.debug.SHOW_OWNER_DEBUG) {
-    return supabase.rpc('get_feed', params);
+    return timed('rpc.get_feed', { userId: params.current_user_id }, () => supabase.rpc('get_feed', params));
   }
-  const debugResult = await supabase.rpc('get_feed_debug', params);
+  const debugResult = await timed('rpc.get_feed_debug', { userId: params.current_user_id }, () =>
+    supabase.rpc('get_feed_debug', params),
+  );
   if (debugResult.error) {
     logger.warn({ error: debugResult.error }, 'get_feed_debug unavailable, falling back to get_feed');
-    return supabase.rpc('get_feed', params);
+    return timed('rpc.get_feed', { userId: params.current_user_id }, () => supabase.rpc('get_feed', params));
   }
   return debugResult;
 }

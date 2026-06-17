@@ -9,7 +9,16 @@ export enum InteractionType {
   LIKE = 1,
 }
 
+export enum TransactionType {
+  SIGNUP_BONUS = 1,
+  MATCH_BONUS = 2,
+  ITEM_TRADE_DEBIT = 3,
+  ITEM_TRADE_CREDIT = 4,
+  MANUAL_ADJUSTMENT = 99,
+}
+
 export const SRID_WGS84 = 4326;
+export const STARTING_BALANCE_POINTS = 100;
 
 export const config = {
   feed: {

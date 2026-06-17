@@ -36,6 +36,7 @@ export function useFeed(coords: Coords | null): UseFeedResult {
   const loadFeed = useCallback(async (offset: number) => {
     const c = coordsRef.current;
     if (!c) {
+      logger.warn({}, 'loadFeed: no coords available, skipping');
       setLoading(false);
       return;
     }

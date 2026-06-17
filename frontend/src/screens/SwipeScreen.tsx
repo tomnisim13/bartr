@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import { ItemCard } from '../components/ItemCard';
 import { DetailModal } from '../components/DetailModal';
 import { MatchModal } from '../components/MatchModal';
 import { EmptyState } from '../components/EmptyState';
 import { ClearAllButton } from '../components/ClearAllButton';
+import { UserSwitcher } from '../components/UserSwitcher';
 import { LocationDeniedScreen } from './LocationDeniedScreen';
 import { useLocation } from '../hooks/useLocation';
 import { useFeed } from '../hooks/useFeed';
@@ -14,12 +15,17 @@ import { InteractionType, config } from '../config';
 import { logger } from '../logger';
 import { Item } from '../types';
 
-export function SwipeScreen() {
+interface Props {
+  onProfilePress: () => void;
+}
+
+export function SwipeScreen({ onProfilePress }: Props) {
   const { status, coords } = useLocation();
   const { cards, loading, empty, lastMatch, reload, recordSwipe, markEmpty, clearLastMatch } = useFeed(coords);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [swiperKey, setSwiperKey] = useState(0);
+  const [switcherVisible, setSwitcherVisible] = useState(false);
 
   const onCleared = () => {
     setSwiperKey(prev => prev + 1);
@@ -59,7 +65,27 @@ export function SwipeScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Bartr</Text>
+      <View style={styles.topRow}>
+        {config.debug.ENABLE_SWITCH_USER ? (
+          <TouchableOpacity
+            onPress={() => setSwitcherVisible(true)}
+            hitSlop={8}
+            style={styles.headerBtn}
+          >
+            <Text style={styles.switchBtnText}>User</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerBtnPlaceholder} />
+        )}
+        <Text style={styles.header}>Bartr</Text>
+        <TouchableOpacity
+          onPress={onProfilePress}
+          hitSlop={8}
+          style={[styles.headerBtn, styles.profileBtn]}
+        >
+          <Text style={styles.profileBtnText}>Profile</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.swiperContainer}>
         <Swiper
           key={swiperKey}
@@ -105,6 +131,13 @@ export function SwipeScreen() {
         onClose={clearLastMatch}
         onSendMessage={onSendMessage}
       />
+      {config.debug.ENABLE_SWITCH_USER && (
+        <UserSwitcher
+          visible={switcherVisible}
+          onClose={() => setSwitcherVisible(false)}
+          onSwitched={() => { setSwiperKey(k => k + 1); reload(); }}
+        />
+      )}
     </View>
   );
 }
@@ -128,13 +161,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f8f8fc',
   },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 10,
+    paddingHorizontal: 16,
+    zIndex: 10,
+  },
   header: {
     fontSize: 28,
     fontWeight: '800',
     color: '#6c47ff',
     textAlign: 'center',
-    paddingTop: 60,
-    paddingBottom: 10,
+    flex: 1,
+  },
+  headerBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#ff9500',
+    borderRadius: 14,
+  },
+  headerBtnPlaceholder: {
+    width: 56,
+  },
+  switchBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  profileBtn: {
+    backgroundColor: '#6c47ff',
+  },
+  profileBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   swiperContainer: {
     flex: 1,
